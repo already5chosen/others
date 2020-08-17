@@ -1,0 +1,3 @@
+clang   -c ../chol_innerLoop.c -std=c99 -Wall -mavx2  -mfma -march=haswell -Ofast
+clang++ -c ../main.cpp ../chol.cpp -Wall -std=c++11 -mavx2 -mfma -march=haswell -Ofast
+clang++ -s -o s_chol main.o chol.o chol_innerLoop.o

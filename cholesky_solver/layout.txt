@@ -1,0 +1,32 @@
+CrBa4_i2 packed matrix layout (AVX variant)
+
+offset*   :
+0         : re(0,0) x       re(1,0) re(1,1) . 1/re(0,0) x       im(1,0) 1/re(1,1) :
+1         : re(2,0) re(2,1) re(3,0) re(3,1) . im(2,0)   im(2,1) im(3,0) im(3,1)   : re(2,2) x       re(3,2) re(3,3) . 1/re(2,2) x       im(3,2) 1/re(3,3) :
+3         : re(4,0) re(4,1) re(5,0) re(5,1) . im(4,0)   im(4,1) im(5,0) im(5,1)   : re(4,2) re(4,3) re(5,2) re(5,3) . im(4,2)   im(4,3) im(5,2) im(5,3)   : re(4,4) x  re(5,4) re(5,5) . 1/re(4,4) x im(5,4) 1/re(5,5) :
+6         : re(6,0) re(6,1) re(7,0) re(7,1) . ......
+10        : re(8,0) re(8,1) re(9,0) re(9,1) . ......
+..........
+
+non-interleaved last line (for N=2*k+1)
+n/2*(n/2+1)/2 : re(n-1,0) re(n-1,1) im(n-1,0) im(n-1,1) . ... . re(n-1,n-3) re(n-1,n-2) im(n-1,n-3) im(n-1,n-2) . re(n-1,n-1) x x x
+ 
+--
+* offset measured in 64B (__m256d[2]) units
+
+--------------------------------------
+CrBa4_i2 packed matrix layout (SSE2 variant)
+
+offset*   :
+0         : re(0,0) re(1,0) . 1/re(0,0) im(1,0) : x       re(1,1) . x       1/re(1,1) :
+2         : re(2,0) re(3,0) . im(2,0)   im(3,0) : re(2,1) re(3,1) . im(2,1) im(3,1)   : re(2,2) re(3,2) . 1/re(2,2) im(3,2) : x       re(3,3) . x        1/re(3,3) :
+6         : re(4,0) re(5,0) . im(4,0)   im(5,0) : re(4,1) re(5,1) . im(4,1) im(5,1)   : re(4,2) re(5,2) . im(4,2)   im(5,2) : re(4,3) re(5,3) . im(4,3)  im(5,3)   : re(4,4) re(5,4) . 1/re(4,4) im(5,4) : x  re(5,5) . x  1/re(5,5) :
+12        : re(6,0) re(7,0) . im(6,0)   im(7,0) :......
+20        : re(8,0) re(9,0) . im(8,0)   im(9,0) :......
+..........
+
+non-interleaved last line (for N=2*k+1)
+n/2*(n/2+1) : re(n-1,0) im(n-1,0) : re(n-1,1)  im(n-1,1) : ... : re(n-1,n-3) im(n-1,n-3) : re(n-1,n-2) im(n-1,n-2) : re(n-1,n-1) 1/re(n-1,n-1)
+
+--
+** offset measured in 32B (__m128d[2]) units
