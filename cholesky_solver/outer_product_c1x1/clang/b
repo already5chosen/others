@@ -1,0 +1,5 @@
+# archflags=" -mavx2 -mfma -march=haswell"
+archflags=" -mavx -march=ivybridge"
+clang++ -c ../../main.cpp -Wall -std=c++11 ${archflags} -Ofast
+clang++ -c ../chol.cpp    -Wall -std=c++11 ${archflags} -Ofast -I../..
+clang++ -s -o s_chol main.o chol.o
