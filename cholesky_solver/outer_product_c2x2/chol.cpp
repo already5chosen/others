@@ -101,7 +101,7 @@ void UnpackUpperTriangle(std::complex<double> *dst, const std::complex<double>* 
       *pOut = *triang++;
       pOut += n;
     }
-    dst += n+1; // to next diaganal element
+    dst += n+1; // to next diagonal element
   }
 }
 
@@ -118,7 +118,7 @@ bool chol_Factorize(std::complex<double>* triang, unsigned N)
     // process top row
     auto x0 = triang;
     {
-    double aa = x0[0].real(); // diaganal element
+    double aa = x0[0].real(); // diagonal element
     // check that we are positive defined
     // printf("%u %e\n", rlen, aa);
     if (aa < DIAG_MIN) {
@@ -142,7 +142,7 @@ bool chol_Factorize(std::complex<double>* triang, unsigned N)
     auto x1 = &triang[rlen];
     { // subtract outer product of top row from next after top row
       auto f = x0[0];
-      double aa = x1[0].real() - norm(f); // diaganal element
+      double aa = x1[0].real() - norm(f); // diagonal element
       // check that we are positive defined
       // printf("%u %e\n", rlen-1, aa);
       if (aa < DIAG_MIN) {
@@ -169,7 +169,7 @@ bool chol_Factorize(std::complex<double>* triang, unsigned N)
       auto f00 = x0[0];
       auto f10 = x1[0];
       auto y0 = &y[0];
-      y0[0].real(y0[0].real() - norm(f00) - norm(f10)); // diaganal element
+      y0[0].real(y0[0].real() - norm(f00) - norm(f10)); // diagonal element
       if (clen <= 1)
         break; // y0 was last row
 
@@ -181,7 +181,7 @@ bool chol_Factorize(std::complex<double>* triang, unsigned N)
       auto f01 = x0[0];
       auto f11 = x1[0];
       auto y1 = &y[clen];
-      y1[0].real(y1[0].real() - norm(f01) - norm(f11)); // diaganal element
+      y1[0].real(y1[0].real() - norm(f01) - norm(f11)); // diagonal element
 
       x0 += 1;
       x1 += 1;
