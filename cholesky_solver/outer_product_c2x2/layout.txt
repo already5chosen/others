@@ -1,0 +1,10 @@
+outer_product_c1 work matrix layout
+Upper-triangle, interleaved re/im, no rows interleaving.
+line :offset*     :
+0    :0           : re(0,0) 1/re(0,0) re(0,1) im(0,1) ... re(0,N-1) im(0,N-1)
+1    :N           : re(1,1) 1/re(1,1) re(1,2) im(1,2) ... re(1,N-1) im(1,N-1)
+2    :N*2-1       : re(2,2) 1/re(2,2) re(2,3) im(2,3) ... re(2,N-1) im(2,N-1)
+..........
+N-1  :N*(N+1)/2-1 : re(N-1,N-1) 1/re(N-1,N-1)
+--
+* offset measured in 16B (double[2]) units
