@@ -276,39 +276,45 @@ bool chol_Factorize(std::complex<double>* triang, unsigned N)
 
   }
 
+  int ltMask = 0;
   for (unsigned rhlen = N / 2; ; rhlen-=1) {
     // process top row
     auto x0 = &triang[0];
     auto x1 = &triang[rhlen*2];
 
     double aa0 = x0[0].real(); // diagonal element
-    // check that we are positive defined
-    // printf("%u %e\n", rlen, aa);
-    if (aa0 < DIAG_MIN) {
-      aa0 = DIAG_SUBST;
-      succ = false;
-    }
-    double aa0Sqrt    = sqrt(aa0);
-    double aa0InvSqrt = 1.0/aa0Sqrt;
-    x0[0].real(aa0Sqrt);
-    x0[0].imag(aa0InvSqrt);
-
-    auto f = x0[1] * aa0InvSqrt;
-    x0[1] = f;
-
+    auto f     = x0[1];
     // process next after top row
     // subtract outer product of top row from next after top row
-    double aa1 = x1[1].real() - norm(f); // diagonal element
-    // check that we are positive defined
-    // printf("%u %e\n", rlen-1, aa1);
-    if (aa1 < DIAG_MIN) {
-      aa1 = DIAG_SUBST;
-      succ = false;
+    double aa1 = x1[1].real()*aa0 - norm(f); // diagonal element
+    #if 0
+    // check that we are positive definite
+    // printf("%u %e %e\n", rlen, aa0. aa1);
+    double aa[] = { aa0, aa1 }, aaSqrt[2], aaInvSqrt[2];
+    for (int k=0; k < 2; ++k) {
+      double v = aa[k];
+      if (v < DIAG_MIN) {
+        v = DIAG_SUBST;
+        succ = false;
+      }
+      aaSqrt[k]    = v = sqrt(v);
+      aaInvSqrt[k] = 1.0/v;
     }
-    double aa1Sqrt    = sqrt(aa1);
-    double aa1InvSqrt = 1.0/aa1Sqrt;
-    x1[1].real(aa1Sqrt);
+    #else
+    __m128d aa = _mm_setr_pd(aa0, aa1);
+    __m128d lt = _mm_cmplt_pd(aa, _mm_set1_pd(DIAG_MIN));
+    aa = _mm_blendv_pd(aa, _mm_set1_pd(DIAG_SUBST), lt);
+    ltMask |= _mm_movemask_pd(lt);
+    __m128d aaSqrt = _mm_sqrt_pd(aa);
+    __m128d aaInvSqrt = _mm_div_pd(_mm_set1_pd(1.0),aaSqrt);
+    #endif
+    double aa0InvSqrt = aaInvSqrt[0];
+    double aa1InvSqrt = aaInvSqrt[1]*aaSqrt[0];
+    x0[0].real(aaSqrt[0]);
+    x0[0].imag(aa0InvSqrt);
+    x1[1].real(aaSqrt[1]*aa0InvSqrt);
     x1[1].imag(aa1InvSqrt);
+    x0[1] = (f *= aa0InvSqrt);
 
     if (rhlen<=1)
       break; // x1 was last row
@@ -376,6 +382,9 @@ bool chol_Factorize(std::complex<double>* triang, unsigned N)
       x1 += 2;
     }
   }
+
+  if (ltMask)
+    succ = false;
   return succ;
 }
 
