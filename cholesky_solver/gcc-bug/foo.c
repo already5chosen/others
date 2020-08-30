@@ -1,9 +1,8 @@
 #include <complex.h>
 
-void foo(double complex *x, int N, const double complex* y)
+double complex foo(double complex acc, const double complex *x, const double complex* y, int N)
 {
-  double complex acc = x[N];
   for (int c = 0; c < N; ++c)
     acc -= x[c] * y[c];
-  x[N] = acc;
+  return acc;
 }

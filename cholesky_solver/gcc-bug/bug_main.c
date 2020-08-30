@@ -1,27 +1,22 @@
 #include <complex.h>
 #include <stdio.h>
 
-static const double complex y[]  = { 1, 2, };
-static const double complex x0[] = {1, 3, 0,};
 
-void foo1(double complex *x, int N, const double complex* y);
-void foo2(double complex *x, int N, const double complex* y);
+double complex foo1(double complex acc, const double complex *x, const double complex* y, int N);
+double complex foo2(double complex acc, const double complex *x, const double complex* y, int N);
 
 int main(void)
 {
-  enum { N = sizeof(x0)/sizeof(x0[0]) };
-  double complex x[2][N];
-  for (int i = 0; i < N; ++i)
-    x[0][i] = x[1][i] = x0[i];
+  static const double complex y[] = { 1, 2, };
+  static const double complex x[] = { 1, 3, };
 
-  foo1(x[0], N-1, y); // reference
-  foo2(x[1], N-1, y); // buggy
+  double complex ref = foo1(0, x, y, 2); // reference
+  double complex res = foo2(0, x, y, 2); // buggy
 
-  for (int i = 0; i < N; ++i)
-    printf(" %+.0f%+.0fi %+.0f%+.0fi\n"
-      ,creal(x[0][i]), cimag(x[0][i])
-      ,creal(x[1][i]), cimag(x[1][i])
-    );
+  printf(" %+.0f%+.0fi %+.0f%+.0fi\n"
+    ,creal(ref), cimag(ref)
+    ,creal(res), cimag(res)
+  );
   return 0;
 }
 
