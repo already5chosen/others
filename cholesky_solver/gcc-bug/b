@@ -1,5 +1,6 @@
 archflags=" -mavx -march=ivybridge"
 gcc -c bug_main.c -Wall -std=c11 ${archflags} -O3
+gcc -c foo.c -Dfoo=foo0 -o foo0.o -Wall -std=c11 ${archflags} -Ofast -fno-tree-vectorize
 gcc -c foo.c -Dfoo=foo1 -o foo1.o -Wall -std=c11 ${archflags} -O3 -fno-trapping-math -fno-signed-zeros -ffinite-math-only
 gcc -c foo.c -Dfoo=foo2 -o foo2.o -Wall -std=c11 ${archflags} -O3 -fno-trapping-math -fno-signed-zeros -ffinite-math-only -fassociative-math
 g++ bug_main.o foo1.o foo2.o
