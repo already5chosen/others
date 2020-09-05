@@ -531,8 +531,30 @@ void chol_SolveFwd(std::complex<double> *x, unsigned N, const std::complex<doubl
     y0 += 2;
     y1 += 2;
     x  += 2;
+    #if 0
     for (int c = 0; c < int(rhlen-1)*2; ++c)
       x[c] = x[c] - y0[c]*xr0 - y1[c]*xr1;
+    #else
+    __m256d xr0_re = _mm256_set1_pd(xr0.real());
+    __m256d xr1_re = _mm256_set1_pd(xr1.real());
+    __m256d xr0_im = _mm256_addsub_pd(_mm256_setzero_pd(), _mm256_set1_pd(xr0.imag()));
+    __m256d xr1_im = _mm256_addsub_pd(_mm256_setzero_pd(), _mm256_set1_pd(xr1.imag()));
+    int cnt = int(rhlen-1), idx = 0;
+    #pragma unroll 1
+    do {
+      __m256d vy0 = _mm256_loadu_pd((const double*)&y0[idx]);
+      __m256d vy1 = _mm256_loadu_pd((const double*)&y1[idx]);
+      __m256d vx  = _mm256_loadu_pd((const double*)&x[idx]);
+      MSUB(vx, vy0, xr0_re);
+      MSUB(vx, vy1, xr1_re);
+      vy0 = _mm256_permute_pd(vy0, 5);
+      vy1 = _mm256_permute_pd(vy1, 5);
+      MSUB(vx, vy0, xr0_im);
+      MSUB(vx, vy1, xr1_im);
+      _mm256_storeu_pd((double*)&x[idx], vx);
+      idx += 2;
+    } while (--cnt);
+    #endif
 
     triang += rhlen*4;
   }
