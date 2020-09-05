@@ -189,14 +189,14 @@ const double DIAG_MIN   =  double(FLT_MIN);
 // and FLT_MIN looks good enough
 const double DIAG_SUBST =  1E40;
 
-bool chol_Factorize(std::complex<double>* triang, unsigned N)
+inline bool chol_FactorizeAndSolveFwd(std::complex<double>* triang, unsigned N, std::complex<double>* result, const bool solveFwd)
 {
   bool succ = true;
   if ((N & 1) != 0) { // special handling for the first row of matrix with odd number of elements
     // process top row
     auto x0 = &triang[1];
     double aa = x0[0].real(); // diagonal element
-    // check that we are positive defined
+    // check that we are positive definite
     // printf("%u %e\n", rlen, aa);
     if (aa < DIAG_MIN) {
       aa = DIAG_SUBST;
@@ -212,8 +212,19 @@ bool chol_Factorize(std::complex<double>* triang, unsigned N)
       return succ; // x0 was last (and only) row
 
     x0 += 1;
-    for (int i = 0; i < int(hlen*2); ++i)
-      x0[i] *= aaInvSqrt;
+    if (!solveFwd) {
+      for (int i = 0; i < int(hlen*2); ++i)
+        x0[i] *= aaInvSqrt;
+    } else { // combine multiplication by invSqrt with Forward propagation
+      auto r = result[0] * aaInvSqrt;
+      result[0] = r;
+      result += 1;
+      for (int i = 0; i < int(hlen*2); ++i) {
+        auto x0val = x0[i] * aaInvSqrt;
+        x0[i]      = x0val;
+        result[i] -= x0val*r;
+      }
+    }
 
     // subtract outer product of top row from lower part of the matrix
     // process two output rows together
@@ -265,6 +276,13 @@ bool chol_Factorize(std::complex<double>* triang, unsigned N)
     x1[1].imag(aa1InvSqrt);
     x0[1] = (f *= aa0InvSqrt);
 
+    if (solveFwd) {
+      auto r0 = result[0] * aa0InvSqrt;
+      auto r1 = (result[1] - f*r0) * aa1InvSqrt;
+      result[0] = r0;
+      result[1] = r1;
+    }
+
     if (rhlen<=1)
       break; // x1 was last row
 
@@ -276,6 +294,15 @@ bool chol_Factorize(std::complex<double>* triang, unsigned N)
       auto ax1 = x1[c];
       x0[c] = ax0 * aa0InvSqrt;
       x1[c] = (ax1 - ax0*conj(f))*aa1InvSqrt;
+    }
+    if (solveFwd) {
+      // Forward propagation of pair of results
+      auto r0 = result[0];
+      auto r1 = result[1];
+      result += 2;
+      for (int c = 0; c < int(rhlen-1)*2; ++c) {
+        result[c] -= x0[c]*r0 + x1[c]*r1;
+      }
     }
 
     // subtract outer product of two top rows from lower part of the matrix
@@ -298,6 +325,16 @@ bool chol_Factorize(std::complex<double>* triang, unsigned N)
     }
   }
   return succ;
+}
+
+bool chol_Factorize(std::complex<double>* triang, unsigned N)
+{
+  return chol_FactorizeAndSolveFwd(triang, N, NULL, false);
+}
+
+bool chol_Factorize(std::complex<double>* triang, unsigned N, std::complex<double>* result)
+{
+  return chol_FactorizeAndSolveFwd(triang, N, result, true);
 }
 
 void chol_SolveFwd(std::complex<double> *x, unsigned N, const std::complex<double>* triang)
@@ -386,20 +423,11 @@ void chol_SolveBwd(std::complex<double> *x, unsigned N, const std::complex<doubl
   }
 }
 
-void chol_Solve(std::complex<double> *result, const std::complex<double> *vecB, unsigned N, const std::complex<double>* triang)
-{
-  memcpy(result, vecB, sizeof(*vecB)*N);
-  chol_SolveFwd(result, N, triang);
-  chol_SolveBwd(result, N, triang);
-}
-
 };
 
 unsigned chol_getWorkBufferSize(int n)
 {
-  return (n & 1)==0 ?
-      n  *(n+2)*(sizeof(std::complex<double>)/2) :
-    (n+1)*(n+1)*(sizeof(std::complex<double>)/2) ;
+  return (n+1)*(n+3)/2*sizeof(std::complex<double>);
 }
 
 // chol - Perform Cholesky decomposition of complex Hermitian matrix
@@ -437,8 +465,8 @@ bool chol(std::complex<double> *dst, const std::complex<double> *src, int n, voi
   PrintLowerTriangle(dst, n);
 #endif
 
-  std::complex<double>* packedResult = static_cast<std::complex<double>*>(workBuffer);
-  std::complex<double>* triang = packedResult;
+  std::complex<double>* packedResult = static_cast<std::complex<double>*>(workBuffer) + (n & 1);
+  std::complex<double>* triang = packedResult + n;
   PackUpperTriangle(triang, src, n, srcLayout);
   bool succ = chol_Factorize(triang, n);
   UnpackUpperTriangle(dst, triang, n);
@@ -490,13 +518,15 @@ bool chol_solver(std::complex<double> *result, const std::complex<double> *src, 
   delete [] dst;
 #endif
 
-  std::complex<double>* packedResult = static_cast<std::complex<double>*>(workBuffer);
-  std::complex<double>* triang = packedResult;
-  // PackVecB(packedResult, vecB, n);
+  std::complex<double>* packedResult = static_cast<std::complex<double>*>(workBuffer) + (n & 1);
+  std::complex<double>* triang = packedResult + n;
   PackUpperTriangle(triang, src, n, srcLayout);
-  bool succ = chol_Factorize(triang, n);
-  if (succ)
-    chol_Solve(result, vecB, n, triang);
+  memcpy(packedResult, vecB, sizeof(*vecB)*n); // PackVecB(packedResult, vecB, n);
+  bool succ = chol_Factorize(triang, n, packedResult);
+  if (succ) {
+    chol_SolveBwd(packedResult, n, triang);
+    memcpy(result, packedResult, sizeof(*result)*n);
+  }
   return succ;
 }
 
@@ -519,9 +549,12 @@ void chol_trif_solver(std::complex<double> *result, const std::complex<double> *
   if (n < N_MIN || n > N_MAX)
     return;
 
-  const std::complex<double>* packedResult = static_cast<const std::complex<double>*>(workBuffer);
-  const std::complex<double>* triang = packedResult;
-  chol_Solve(result, vecB, n, triang);
+  std::complex<double>* packedResult = static_cast<std::complex<double>*>(workBuffer) + (n & 1);
+  memcpy(packedResult, vecB, sizeof(*vecB)*n); // PackVecB(packedResult, vecB, n);
+  const std::complex<double>* triang = packedResult + n;
+  chol_SolveFwd(packedResult, n, triang);
+  chol_SolveBwd(packedResult, n, triang);
+  memcpy(result, packedResult, sizeof(*result)*n);
 
   // PackVecB(packedResult, vecB, n);
 
