@@ -577,18 +577,51 @@ void chol_SolveBwd(std::complex<double> *x, unsigned N, const std::complex<doubl
     triang -= rhlen*4; // point to diag element
     auto y0 = &triang[0];
     auto y1 = &triang[rhlen*2];
-    auto acc0 = x[-2];
-    auto acc1 = x[-1];
-    for (int c = 0; c < int(rhlen-1)*2; ++c) {
-      acc0 -= x[c] * conj(y0[2+c]);
-      acc1 -= x[c] * conj(y1[2+c]);
+    x -= 2;
+    auto acc0 = x[0];
+    auto acc1 = x[1];
+    #if 0
+    for (int c = 2; c < int(rhlen)*2; ++c) {
+      acc0 -= x[c] * conj(y0[c]);
+      acc1 -= x[c] * conj(y1[c]);
     }
+    #else
+    if (rhlen > 1) {
+      __m256d vacc0_re = _mm256_setr_pd(acc0.real(),0,0,0);
+      __m256d vacc1_re = _mm256_setr_pd(acc1.real(),0,0,0);
+      __m256d vacc0_im = _mm256_setr_pd(acc0.imag(),0,0,0);
+      __m256d vacc1_im = _mm256_setr_pd(acc1.imag(),0,0,0);
+      int cnt = int(rhlen-1), idx = 2;
+      #pragma unroll 1
+      do {
+        __m256d vy0 = _mm256_loadu_pd((const double*)&y0[idx]);
+        __m256d vy1 = _mm256_loadu_pd((const double*)&y1[idx]);
+        __m256d vx  = _mm256_loadu_pd((const double*)&x[idx]);
+        MSUB(vacc0_re, vy0, vx);
+        MSUB(vacc1_re, vy1, vx);
+        vx = _mm256_permute_pd(vx, 5);
+        MSUB(vacc0_im, vy0, vx);
+        MSUB(vacc1_im, vy1, vx);
+        idx += 2;
+      } while (--cnt);
+      __m256d vacc01_re = _mm256_hadd_pd(vacc0_re, vacc1_re);
+      __m256d vacc01_im = _mm256_hsub_pd(vacc0_im, vacc1_im);
+      __m256d vacc0 = _mm256_unpacklo_pd(vacc01_re, vacc01_im);
+      __m256d vacc1 = _mm256_unpackhi_pd(vacc01_re, vacc01_im);
+      __m256d vacc01a = _mm256_permute2f128_pd(vacc0, vacc1, 0x21);
+      __m256d vacc01b = _mm256_blend_pd(vacc0, vacc1, 0xC);
+      __m256d vacc01 = _mm256_add_pd(vacc01a, vacc01b);
+      acc0.real(vacc01[0]);
+      acc0.imag(vacc01[1]);
+      acc1.real(vacc01[2]);
+      acc1.imag(vacc01[3]);
+    }
+    #endif
     acc1 *= y1[1].imag(); // imag() of diag element contains inverse of it's real()
     acc0 -= acc1*conj(y0[1]);
     acc0 *= y0[0].imag();
-    x[-2] = acc0;
-    x[-1] = acc1;
-    x -= 2;
+    x[0] = acc0;
+    x[1] = acc1;
   }
 
   if ((N & 1) != 0) { // special handling for the first row of matrix with odd number of elements
