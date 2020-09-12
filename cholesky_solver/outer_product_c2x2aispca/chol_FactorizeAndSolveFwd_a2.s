@@ -146,67 +146,14 @@ chol_FactorizeAndSolveFwd_a:
     add    $32, %rcx                    # triang += 2
   dec      %rbx                         # --chlen
   jnz .caxpy1x2_outer_loop
+  jmp .even_loop_entry
 
-
-   jmp        .even_loop
 .start_even:
   shr $1, %edx                          # edx = rhlen = N/2
-  jz .done
+  jnz .even_loop_entry
+  jmp .done
+
 .even_loop:
-  # RDX = rhlen
-  mov %edx, %ebx
-  shl $5, %ebx                    # rbx  = rhlen*2*sizeof(DComplex) = (x1-x0)*sizeof(DComplex)
-  vmovsd   (%rcx), %xmm0          # ymm0 = aa0 = triang[0].re, 0,0,0
-  vmovsd 16(%rcx,%rbx), %xmm1     # ymm1 = aa1 = x1[1].re, 0,0,0
-  vmulsd    %xmm0, %xmm1, %xmm1
-  vmovupd 16(%rcx),%xmm2          # ymm2 = {f.re f.im 0 0} = triang[1],0,0
-  # aa1 = aa1*aa0 - norm(f)
-  vmulpd    %xmm2, %xmm2, %xmm3   # xmm3 = {f.re^2 f.im^2}
-  vhaddpd   %xmm3, %xmm3, %xmm3   # xmm3 = {f.re^2+f.im^2 ...}
-  vsubsd    %xmm3, %xmm1, %xmm1   # xmm1 = {aa1*aa0 - norm(f) ...}
-  vunpcklpd %xmm1, %xmm0, %xmm0   # ymm0 = aa0, aa1, 0, 0
-
-  vmovddup .LDIAG_MIN(%rip), %xmm1
-  vcmpltpd  %xmm1, %xmm0, %xmm1         # xmm1 = ltmsk =[aa0<DIAG_MIN aa1<DIAG_MIN]
-  vmovddup  .LDIAG_SUBST(%rip), %xmm3
-  vblendvpd %xmm1, %xmm3, %xmm0,%xmm0   # xmm0 = aa[0:1] < DIAG_MIN ? DIAG_SUBST : aa[0:1]
-  vmovmskpd %xmm1, %eax
-  or        %eax,  %r11d
-  vsqrtpd   %xmm0, %xmm0                # xmm0 = [sqrt(aa0), sqrt(aa1)]
-  vmovddup  .LONE(%rip), %xmm1
-  vdivpd    %xmm0, %xmm1,%xmm1          # xmm1 = [1/sqrt(aa0), 1/sqrt(aa1)]
-
-  vunpcklpd %xmm1, %xmm0,%xmm3          # ymm3 = aa0Sqrt=sqrt(aa0), aa0InvSqrt=1/sqrt(aa0), 0, 0
-  vunpckhpd %xmm0, %xmm1,%xmm4          # ymm4 = 1/sqrt(aa1), sqrt(aa1), 0, 0
-  vmovupd   %xmm3, (%rcx)               # triang[0].re = sqrt(aa0) triang[0].im = 1/sqrt(aa0)
-  vmovddup  %xmm1, %xmm0                # xmm0 = {aa0InvSqrt aa0InvSqrt 0 0}
-
-  vmulpd    %xmm4, %xmm3,%xmm4          # ymm4  = aa1InvSqrt = 1/sqrt(aa1)*aa0Sqrt, aa1Sqrt=sqrt(aa1)*aa0InvSqrt, 0, 0
-  vmovddup  %xmm4, %xmm1                # xmm1 = {aa1InvSqrt aa1InvSqrt 0 0}
-  vpermilpd $1, %xmm4,   %xmm4          # xmm4  = aa1Sqrt, aa1InvSqrt, 0, 0
-  vmovupd   %xmm4, 16(%rcx,%rbx)        # x1[1] = (aa1Sqrt, aa1InvSqrt)
-
-  vmulpd    %xmm0, %xmm2,%xmm2          # xmm2  = {f.re*=aa0InvSqrt f.im*=aa0InvSqrt 0 0}
-  vmovupd   %xmm2, 16(%rcx)             # triang[1] = {f.re f.im }
-
-  mov       %r8,   %rax                 # rax  = result
-  vmulpd    (%rax),%xmm0, %xmm4         # xmm4 = r0.re r0.im = result[0]*aa0InvSqrt
-  vunpckhpd %xmm2, %xmm2, %xmm3         # ymm3 = f.im f.im 0 0
-  vmovddup  %xmm2, %xmm2                # xmm2 = f.re f.re 0 0
-  vmulpd    %xmm4, %xmm2, %xmm5         # xmm5 = r0.re*f.re r0.im*f.re
-  vpermilpd $1,    %xmm4, %xmm6         # xmm6 = r0.im      r0.re
-  vmulpd    %xmm6, %xmm3, %xmm6         # xmm6 = r0.re*f.im r0.im*f.im
-  vaddsubpd %xmm6, %xmm5, %xmm5         # xmm5 = r0*f             (re im)
-  vmovupd 16(%rax),%xmm6                # xmm6 = result[1]        (re im)
-  vsubpd    %xmm5, %xmm6, %xmm6         # xmm6 = result[1] - r0*f (re im)
-  vmulpd    %xmm6, %xmm1, %xmm6         # xmm6 = r1 = ((result[1] - r0*f) * aa1InvSqrt) (re im)
-
-  vmovupd   %xmm4, (%rax)               # result[0] = r0
-  vmovupd   %xmm6, 16(%rax)             # result[1] = r1
-
-  cmp       $1, %edx
-  jle       .done                       # x1 was last row
-
   # Combine handling of pair of top rows with forward propagation of pair of results
   vxorpd    %ymm8, %ymm8, %ymm8         # ymm8 = 0 0 0 0
   vaddsubpd %xmm3, %xmm8, %xmm3         # ymm3 = -f.im  f.im  0 0
@@ -317,8 +264,60 @@ chol_FactorizeAndSolveFwd_a:
   jnz .caxpy2x2_outer_loop
 
   add %rbx, %rcx                        # triang = x0 + (x1-x0)
+.even_loop_entry:
+  # RDX = rhlen
+  mov %edx, %ebx
+  shl $5, %ebx                    # rbx  = rhlen*2*sizeof(DComplex) = (x1-x0)*sizeof(DComplex)
+  vmovsd   (%rcx), %xmm0          # ymm0 = aa0 = triang[0].re, 0,0,0
+  vmovsd 16(%rcx,%rbx), %xmm1     # ymm1 = aa1 = x1[1].re, 0,0,0
+  vmulsd    %xmm0, %xmm1, %xmm1
+  vmovupd 16(%rcx),%xmm2          # ymm2 = {f.re f.im 0 0} = triang[1],0,0
+  # aa1 = aa1*aa0 - norm(f)
+  vmulpd    %xmm2, %xmm2, %xmm3   # xmm3 = {f.re^2 f.im^2}
+  vhaddpd   %xmm3, %xmm3, %xmm3   # xmm3 = {f.re^2+f.im^2 ...}
+  vsubsd    %xmm3, %xmm1, %xmm1   # xmm1 = {aa1*aa0 - norm(f) ...}
+  vunpcklpd %xmm1, %xmm0, %xmm0   # ymm0 = aa0, aa1, 0, 0
 
-  jmp .even_loop
+  vmovddup .LDIAG_MIN(%rip), %xmm1
+  vcmpltpd  %xmm1, %xmm0, %xmm1         # xmm1 = ltmsk =[aa0<DIAG_MIN aa1<DIAG_MIN]
+  vmovddup  .LDIAG_SUBST(%rip), %xmm3
+  vblendvpd %xmm1, %xmm3, %xmm0,%xmm0   # xmm0 = aa[0:1] < DIAG_MIN ? DIAG_SUBST : aa[0:1]
+  vmovmskpd %xmm1, %eax
+  or        %eax,  %r11d
+  vsqrtpd   %xmm0, %xmm0                # xmm0 = [sqrt(aa0), sqrt(aa1)]
+  vmovddup  .LONE(%rip), %xmm1
+  vdivpd    %xmm0, %xmm1,%xmm1          # xmm1 = [1/sqrt(aa0), 1/sqrt(aa1)]
+
+  vunpcklpd %xmm1, %xmm0,%xmm3          # ymm3 = aa0Sqrt=sqrt(aa0), aa0InvSqrt=1/sqrt(aa0), 0, 0
+  vunpckhpd %xmm0, %xmm1,%xmm4          # ymm4 = 1/sqrt(aa1), sqrt(aa1), 0, 0
+  vmovupd   %xmm3, (%rcx)               # triang[0].re = sqrt(aa0) triang[0].im = 1/sqrt(aa0)
+  vmovddup  %xmm1, %xmm0                # xmm0 = {aa0InvSqrt aa0InvSqrt 0 0}
+
+  vmulpd    %xmm4, %xmm3,%xmm4          # ymm4  = aa1InvSqrt = 1/sqrt(aa1)*aa0Sqrt, aa1Sqrt=sqrt(aa1)*aa0InvSqrt, 0, 0
+  vmovddup  %xmm4, %xmm1                # xmm1 = {aa1InvSqrt aa1InvSqrt 0 0}
+  vpermilpd $1, %xmm4,   %xmm4          # xmm4  = aa1Sqrt, aa1InvSqrt, 0, 0
+  vmovupd   %xmm4, 16(%rcx,%rbx)        # x1[1] = (aa1Sqrt, aa1InvSqrt)
+
+  vmulpd    %xmm0, %xmm2,%xmm2          # xmm2  = {f.re*=aa0InvSqrt f.im*=aa0InvSqrt 0 0}
+  vmovupd   %xmm2, 16(%rcx)             # triang[1] = {f.re f.im }
+
+  mov       %r8,   %rax                 # rax  = result
+  vmulpd    (%rax),%xmm0, %xmm4         # xmm4 = r0.re r0.im = result[0]*aa0InvSqrt
+  vunpckhpd %xmm2, %xmm2, %xmm3         # ymm3 = f.im f.im 0 0
+  vmovddup  %xmm2, %xmm2                # xmm2 = f.re f.re 0 0
+  vmulpd    %xmm4, %xmm2, %xmm5         # xmm5 = r0.re*f.re r0.im*f.re
+  vpermilpd $1,    %xmm4, %xmm6         # xmm6 = r0.im      r0.re
+  vmulpd    %xmm6, %xmm3, %xmm6         # xmm6 = r0.re*f.im r0.im*f.im
+  vaddsubpd %xmm6, %xmm5, %xmm5         # xmm5 = r0*f             (re im)
+  vmovupd 16(%rax),%xmm6                # xmm6 = result[1]        (re im)
+  vsubpd    %xmm5, %xmm6, %xmm6         # xmm6 = result[1] - r0*f (re im)
+  vmulpd    %xmm6, %xmm1, %xmm6         # xmm6 = r1 = ((result[1] - r0*f) * aa1InvSqrt) (re im)
+
+  vmovupd   %xmm4, (%rax)               # result[0] = r0
+  vmovupd   %xmm6, 16(%rax)             # result[1] = r1
+
+  cmp       $1, %edx
+  jg       .even_loop                   # x1 was not a last row
 .done:
   xor %eax, %eax
   test $3, %r11
