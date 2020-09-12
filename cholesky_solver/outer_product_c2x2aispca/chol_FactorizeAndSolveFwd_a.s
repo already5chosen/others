@@ -126,23 +126,23 @@ chol_FactorizeAndSolveFwd_a:
     vaddsubpd     %ymm3, %ymm4, %ymm3   # ymm3 = -f1.im f1.im -f1.im f1.im
     mov     %ebx, %r9d                  # r9d = cnt = chlen
     .caxpy1x2_inner_loop:
-      vmovupd (%rdi),      %ymm8        # ymm8 = vx  = x0[c] (re im re im)
-      vmovupd (%rdi,%rax), %ymm10       # ymm10= vy0 = y0[c] (re im re im)
-      vmovupd (%rdi,%rsi), %ymm11       # ymm11= vy1 = y1[c] (re im re im)
+      vmovupd (%rdi),       %ymm4       # ymm4= vx  = x0[c] (re im re im)
+      vmovupd (%rdi,%rax),  %ymm5       # ymm5= vy0 = y0[c] (re im re im)
+      vmovupd (%rdi,%rsi),  %ymm6       # ymm6= vy1 = y1[c] (re im re im)
 
-      vmulpd  %ymm8, %ymm0, %ymm12
-      vsubpd  %ymm12,%ymm10,%ymm10      # ymm10= vy0.re-vx0.re*f00.re vy0.im-vx0.im*f00.re
-      vmulpd  %ymm8, %ymm2, %ymm12
-      vsubpd  %ymm12,%ymm11,%ymm11      # ymm11= vy1.re-vx0.re*f01.re vy1.im-vx0.im*f01.re
-      vpermilpd $5,  %ymm8,%ymm8        # ymm8 = vx0 { im re im re }
+      vmulpd  %ymm4, %ymm0, %ymm7
+      vsubpd  %ymm7, %ymm5, %ymm5       # ymm5= vy0.re-vx0.re*f00.re vy0.im-vx0.im*f00.re
+      vmulpd  %ymm4, %ymm2, %ymm7
+      vsubpd  %ymm7, %ymm6, %ymm6       # ymm6= vy1.re-vx0.re*f01.re vy1.im-vx0.im*f01.re
+      vpermilpd $5,  %ymm4, %ymm4       # ymm4= vx0 { im re im re }
 
-      vmulpd  %ymm8, %ymm1, %ymm12
-      vaddpd  %ymm12,%ymm10,%ymm10      # ymm10= vy0.re-vx0.im*f00.im vy0.im+vx0.re*f00.im
-      vmulpd  %ymm8, %ymm3, %ymm12
-      vaddpd  %ymm12,%ymm11,%ymm11      # ymm11= vy1.re-vx0.im*f01.im vy1.im+vx0.re*f01.im
+      vmulpd  %ymm4, %ymm1, %ymm7
+      vaddpd  %ymm7, %ymm5, %ymm5       # ymm5= vy0.re-vx0.im*f00.im vy0.im+vx0.re*f00.im
+      vmulpd  %ymm4, %ymm3, %ymm7
+      vaddpd  %ymm7, %ymm6, %ymm6       # ymm6= vy1.re-vx0.im*f01.im vy1.im+vx0.re*f01.im
 
-      vmovupd %ymm10, (%rdi,%rax)       # ymm10= vy0 = y0[c] (re im re im)
-      vmovupd %ymm11, (%rdi,%rsi)       # ymm11= vy1 = y1[c] (re im re im)
+      vmovupd %ymm5, (%rdi,%rax)        # ymm5= vy0 = y0[c] (re im re im)
+      vmovupd %ymm6, (%rdi,%rsi)        # ymm6= vy1 = y1[c] (re im re im)
 
       add    $32, %rdi                  # x0 += 2
     dec      %r9d                       # --cnt
