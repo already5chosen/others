@@ -416,9 +416,16 @@ void chol_SolveBwd(std::complex<double> *x, unsigned N, const std::complex<doubl
 
   if ((N & 1) != 0) { // special handling for the first row of matrix with odd number of elements
     triang -= hlen*2;
+    #ifdef GCC10_WORKAROUND
+    std::complex<double> acc = 0;
+    for (int c = 0; c < int(hlen)*2; ++c)
+      acc += x[c] * conj(triang[c]);
+    acc = x[-1] - acc;
+    #else
     auto acc = x[-1];
     for (int c = 0; c < int(hlen)*2; ++c)
       acc -= x[c] * conj(triang[c]);
+    #endif
     x[-1] = acc * triang[-1].imag(); // imag() of diag element contains inverse of it's real()
   }
 }

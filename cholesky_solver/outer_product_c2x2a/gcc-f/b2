@@ -1,0 +1,6 @@
+archflags="-mavx2 -mfma -march=haswell -mtune=skylake"
+copt="-Wall -std=c++11 -Ofast -I../.. -DGCC10_WORKAROUND $archflags"
+CC=g++
+$CC -c ../../main.cpp $copt -o main.2.o
+$CC -c ../chol.cpp    $copt -o chol.2.o
+$CC -s -o s_chol.2.exe main.2.o chol.2.o
