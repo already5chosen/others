@@ -250,7 +250,9 @@ inline bool chol_FactorizeAndSolveFwd(std::complex<double>* triang, unsigned N, 
       __m256d r_im = _mm256_addsub_pd(_mm256_setzero_pd(), _mm256_set1_pd(r.imag()));
       __m256d vaInvSqrt = _mm256_set1_pd(aaInvSqrt);
       int cnt = int(hlen), idx = 0;
+      #ifdef __clang__
       #pragma unroll 1
+      #endif
       do {
         __m256d vx0 = _mm256_loadu_pd((const double*)&x0[idx]);
         __m256d vr  = _mm256_loadu_pd((const double*)&result[idx]);
@@ -285,7 +287,9 @@ inline bool chol_FactorizeAndSolveFwd(std::complex<double>* triang, unsigned N, 
       __m256d f00_im = _mm256_addsub_pd(_mm256_setzero_pd(), _mm256_set1_pd(x0[0].imag()));
       __m256d f01_im = _mm256_addsub_pd(_mm256_setzero_pd(), _mm256_set1_pd(x0[1].imag()));
       int cnt = int(hlen), idx = 0;
+      #ifdef __clang__
       #pragma unroll 1
+      #endif
       do {
         __m256d vx0 = _mm256_loadu_pd((const double*)&x0[idx]);
         __m256d vy0 = _mm256_loadu_pd((const double*)&y0[idx]);
@@ -397,7 +401,9 @@ inline bool chol_FactorizeAndSolveFwd(std::complex<double>* triang, unsigned N, 
       __m256d va1InvSqrt = _mm256_set1_pd(aa1InvSqrt);
       result += 2;
       int cnt = int(rhlen-1), idx = 0;
+      #ifdef __clang__
       #pragma unroll 1
+      #endif
       do {
         __m256d vx0 = _mm256_loadu_pd((const double*)&x0[idx]);
         __m256d vx1 = _mm256_loadu_pd((const double*)&x1[idx]);
@@ -451,7 +457,9 @@ inline bool chol_FactorizeAndSolveFwd(std::complex<double>* triang, unsigned N, 
       auto y0 = &y[0];
       auto y1 = &y[chlen*2];
       int cnt = int(chlen), idx = 0;
+      #ifdef __clang__
       #pragma unroll 1
+      #endif
       do {
         __m256d vx0 = _mm256_loadu_pd((const double*)&x0[idx]);
         __m256d vy0 = _mm256_loadu_pd((const double*)&y0[idx]);
@@ -540,7 +548,9 @@ void chol_SolveFwd(std::complex<double> *x, unsigned N, const std::complex<doubl
     __m256d xr0_im = _mm256_addsub_pd(_mm256_setzero_pd(), _mm256_set1_pd(xr0.imag()));
     __m256d xr1_im = _mm256_addsub_pd(_mm256_setzero_pd(), _mm256_set1_pd(xr1.imag()));
     int cnt = int(rhlen-1), idx = 0;
+    #ifdef __clang__
     #pragma unroll 1
+    #endif
     do {
       __m256d vy0 = _mm256_loadu_pd((const double*)&y0[idx]);
       __m256d vy1 = _mm256_loadu_pd((const double*)&y1[idx]);
@@ -592,7 +602,9 @@ void chol_SolveBwd(std::complex<double> *x, unsigned N, const std::complex<doubl
       __m256d vacc0_im = _mm256_setr_pd(acc0.imag(),0,0,0);
       __m256d vacc1_im = _mm256_setr_pd(acc1.imag(),0,0,0);
       int cnt = int(rhlen-1), idx = 2;
+      #ifdef __clang__
       #pragma unroll 1
+      #endif
       do {
         __m256d vy0 = _mm256_loadu_pd((const double*)&y0[idx]);
         __m256d vy1 = _mm256_loadu_pd((const double*)&y1[idx]);
@@ -626,9 +638,16 @@ void chol_SolveBwd(std::complex<double> *x, unsigned N, const std::complex<doubl
 
   if ((N & 1) != 0) { // special handling for the first row of matrix with odd number of elements
     triang -= hlen*2;
+    #ifdef GCC10_WORKAROUND
+    std::complex<double> acc = 0;
+    for (int c = 0; c < int(hlen)*2; ++c)
+      acc += x[c] * conj(triang[c]);
+    acc = x[-1] - acc;
+    #else
     auto acc = x[-1];
     for (int c = 0; c < int(hlen)*2; ++c)
       acc -= x[c] * conj(triang[c]);
+    #endif
     x[-1] = acc * triang[-1].imag(); // imag() of diag element contains inverse of it's real()
   }
 }
