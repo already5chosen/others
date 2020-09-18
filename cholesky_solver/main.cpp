@@ -218,7 +218,7 @@ int main(int argz, char** argv)
   double flops = deconvFlops+substFlops;
   if (profileTrifSolver)
     flops += substFlops;
-  printf("N=%4d. %.1f usec. %.3f GMADD/s\n", n, tmPerTest*1E6, flops/(tmPerTest*1E9));
+  printf("N=%4d. %6.2f usec. %.3f GMADD/s\n", n, tmPerTest*1E6, flops/(tmPerTest*1E9));
 
 #if 0
   unsigned wsz = chol_getWorkBufferSize(n);
