@@ -1,0 +1,12 @@
+archflags="-mavx2 -mfma -march=haswell -mtune=skylake"
+copt="-Wall -std=c++11 -Ofast -I../.. $archflags"
+CC=clang++
+AS=clang
+$CC -c ../../main.cpp $copt -o main.2.o  &
+$CC -c ../chol.cpp    $copt -o chol.2.o  &
+$AS -c ../chol_FactorizeAndSolveFwd_a2.s &
+$AS -c ../chol_SolveFwd_a2.s             &
+$AS -c ../chol_SolveBwd_a2.s             &
+$AS -c ../chol_Factorize_a2.s            &
+wait
+$CC -s -o s_chol.2.exe main.2.o chol.2.o chol_FactorizeAndSolveFwd_a2.o chol_SolveFwd_a2.o chol_SolveBwd_a2.o chol_Factorize_a2.o
