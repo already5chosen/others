@@ -1,0 +1,10 @@
+archflags="-mavx2 -mfma -march=haswell -mtune=skylake"
+copt="-Wall -std=c++11 -Ofast $archflags"
+CC=g++
+$CC -c main.cpp $copt -o main.o
+$CC -c chol.cpp $copt -o chol_a.o
+$CC -S chol.cpp $copt -o chol_a.s
+patch chol_a.s chol_b.s.diff --binary -o chol_b.s
+$CC -c chol_b.s $copt -o chol_b.o
+$CC -s -o s_chol_a main.o chol_a.o
+$CC -s -o s_chol_b main.o chol_b.o

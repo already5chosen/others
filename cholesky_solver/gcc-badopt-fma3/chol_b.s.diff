@@ -1,0 +1,10 @@
+276,279c276,279
+< 	vmovapd	%ymm1, %ymm10
+< 	vmovapd	%ymm1, %ymm11
+< 	vfnmadd213pd	(%rdx,%rax), %ymm9, %ymm10
+< 	vfnmadd213pd	(%rcx,%rax), %ymm7, %ymm11
+---
+> 	vmovupd	(%rdx,%rax), %ymm10
+> 	vmovupd	(%rcx,%rax), %ymm11
+> 	vfnmadd231pd	%ymm1, %ymm9, %ymm10
+> 	vfnmadd231pd	%ymm1, %ymm7, %ymm11
