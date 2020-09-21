@@ -1,0 +1,11 @@
+ISPC=ispc
+CC=g++
+ispcflags=" --addressing=64 --target=avx1-i64x4"
+archflags=" -mavx -march=ivybridge -mtune=skylake"
+copt="-Wall -std=c++11 -Ofast -I../.. $archflags"
+$ISPC ../chol_FactorizeAndSolveFwd.ispc ${ispcflags} -o chol_FactorizeAndSolveFwd.1.o -h ../chol_FactorizeAndSolveFwd.h
+$ISPC ../chol_SolveBwd.ispc             ${ispcflags} -o chol_SolveBwd.1.o             -h ../chol_SolveBwd.h
+$ISPC ../chol_SolveFwd.ispc             ${ispcflags} -o chol_SolveFwd.1.o             -h ../chol_SolveFwd.h
+$CC -c ../../main.cpp $copt -o main.1.o
+$CC -c ../chol.cpp    $copt -o chol.1.o
+$CC -s -o s_chol.1.exe main.1.o chol.1.o chol_FactorizeAndSolveFwd.1.o chol_SolveBwd.1.o chol_SolveFwd.1.o
