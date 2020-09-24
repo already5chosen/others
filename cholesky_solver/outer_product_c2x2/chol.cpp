@@ -9,9 +9,12 @@
 
 #if CHOL_DBG
 bool chol_scalar(std::complex<double> *dst, const std::complex<double> *src, int n);
+void chol_SolveFwd_scalar(std::complex<double> *x, unsigned N, const std::complex<double>* mat, const std::complex<double> *vecB);
+void chol_SolveBwd_scalar(std::complex<double> *x, unsigned N, const std::complex<double>* mat);
 void PrintLowerTriangle(const std::complex<double> *src, unsigned n);
 void PrintLowerTriangle(std::complex<double> *dst, const __m256d* triang, unsigned n);
 void PrintInternalTriangle(const std::complex<double> *src, unsigned n);
+void PrintResult(const std::complex<double> *src, unsigned n);
 #endif
 
 namespace {
@@ -242,6 +245,10 @@ void chol_Solve(std::complex<double> *result, const std::complex<double> *vecB, 
 {
   memcpy(result, vecB, sizeof(*vecB)*N);
   chol_SolveFwd(result, N, triang);
+#if CHOL_DBG
+  printf("res x:\n");
+  PrintResult(result, N);
+#endif
   chol_SolveBwd(result, N, triang);
 }
 
@@ -301,6 +308,8 @@ bool chol(std::complex<double> *dst, const std::complex<double> *src, int n, voi
   PrintInternalTriangle(triang, n);
   printf("res:\n");
   PrintLowerTriangle(dst, n);
+#endif
+#if CHOL_DBG==1
   return false;
 #endif
 
@@ -336,11 +345,16 @@ bool chol_solver(std::complex<double> *result, const std::complex<double> *src, 
     return false;
 
 #if CHOL_DBG
+  printf("src:\n");
   PrintLowerTriangle(src, n);
-  std::complex<double>* dst = new std::complex<double>[n*n];
-  chol_scalar(dst, src, n);
-  PrintLowerTriangle(dst, n);
-  delete [] dst;
+  std::complex<double>* ref_tri = new std::complex<double>[n*n];
+  chol_scalar(ref_tri, src, n);
+  printf("ref tri:\n");
+  PrintLowerTriangle(ref_tri, n);
+  std::complex<double>* ref_x = new std::complex<double>[n];
+  chol_SolveFwd_scalar(ref_x, n, ref_tri, vecB);
+  printf("ref x:\n");
+  PrintResult(ref_x, n);
 #endif
 
   std::complex<double>* packedResult = static_cast<std::complex<double>*>(workBuffer);
@@ -350,6 +364,20 @@ bool chol_solver(std::complex<double> *result, const std::complex<double> *src, 
   bool succ = chol_Factorize(triang, n);
   if (succ)
     chol_Solve(result, vecB, n, triang);
+
+#if CHOL_DBG
+  chol_SolveBwd_scalar(ref_x, n, ref_tri);
+  printf("ref result:\n");
+  PrintResult(ref_x, n);
+  printf("result:\n");
+  PrintResult(result, n);
+  delete [] ref_tri;
+  delete [] ref_x;
+#endif
+#if CHOL_DBG==2
+  return false;
+#endif
+
   return succ;
 }
 
@@ -428,7 +456,6 @@ bool chol_scalar(std::complex<double> *dst, const std::complex<double> *src, int
 {
   const int N_MIN = 1;
   const int N_MAX = 128;
-  const int SIMD_FACTOR = 4;
   if (n < N_MIN || n > N_MAX)
     return false;
 
@@ -566,6 +593,30 @@ bool chol_scalar(std::complex<double> *dst, const std::complex<double> *src, int
   return true;
 }
 
+void chol_SolveFwd_scalar(std::complex<double> *x, unsigned N, const std::complex<double>* mat, const std::complex<double> *vecB)
+{
+  for (unsigned i = 0; i < N; ++i)
+    x[i] = vecB[i];
+  for (unsigned r = 0; r < N; ++r) {
+    auto x0 = x[r];
+    for (unsigned c = 0; c < r; ++c)
+      x0 -= x[c]*mat[c];
+    x[r] = x0 / mat[r].real();
+    mat += N;
+  }
+}
+
+void chol_SolveBwd_scalar(std::complex<double> *x, unsigned N, const std::complex<double>* mat)
+{
+  mat += N*(N-1);
+  for (unsigned rlen = N; rlen > 0; --rlen) {
+    auto x0 = (x[rlen-1] /= mat[rlen-1].real());
+    for (unsigned c = 0; c < rlen-1; ++c)
+      x[c] -= x0*conj(mat[c]);
+    mat -= N;
+  }
+}
+
 void PrintLowerTriangle(const std::complex<double> *src, unsigned n)
 {
   for (unsigned i = 0; i < n; ++i)
@@ -574,6 +625,13 @@ void PrintLowerTriangle(const std::complex<double> *src, unsigned n)
       printf("(%9f %9f) ", src[n*i+j].real(), src[n*i+j].imag());
     printf("\n");
   }
+}
+
+void PrintResult(const std::complex<double> *src, unsigned n)
+{
+  for (unsigned i = 0; i < n; ++i)
+    printf("(%9f %9f) ", src[i].real(), src[i].imag());
+  printf("\n");
 }
 
 void PrintInternalTriangle(const std::complex<double> *src, unsigned n)
