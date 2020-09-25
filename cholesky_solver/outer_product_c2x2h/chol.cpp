@@ -481,43 +481,78 @@ void chol_SolveFwd(double *x, unsigned N, const double* triang)
     // x(r) = x(r)/R(r,r);
     // x(r+1:N) -= R(r, r+1:N).'*x(r);
   // end
-#if 0
   if ((N & 1) != 0) {    // special handling for the first row of matrix with odd number of elements
-    auto y = &triang[1]; // point to diag element
-    auto xr = x[0] * y[0].imag(); // imag() of diag element contains inverse of real() part
-    x[0] = xr;
-    if (N <= 1)
+    int xi = ~N & 2;
+    auto aaInvSqrt = triang[xi+1+4]; // imag() of diag element contains inverse of its real()
+    auto x0 = &x[xi+1];
+    auto xr_re = x0[0] * aaInvSqrt;
+    auto xr_im = x0[4] * aaInvSqrt;
+    int qlen = (N+1)/4;
+    if (qlen != 0) {
+      x += xi*4;
+      auto y = &triang[xi*4];
+      for (int c = 0; c < qlen; ++c) {
+        // x[c] -= y[c]*xr;
+        for (int k = 0; k < 4; ++k) {
+          auto x_re = x[c*8+k+0];
+          auto x_im = x[c*8+k+4];
+          auto y_re = y[c*8+k+0];
+          auto y_im = y[c*8+k+4];
+          x[c*8+k+0] = x_re - y_re*xr_re + y_im*xr_im;
+          x[c*8+k+4] = x_im - y_re*xr_im - y_im*xr_re;
+        }
+      }
+    }
+    x0[0] = xr_re;
+    x0[4] = xr_im;
+    if (qlen == 0)
       return;
-    x += 1;
-    y += 1;
-    unsigned hlen = N / 2;
-    for (int c = 0; c < int(hlen)*2; ++c)
-      x[c] -= y[c]*xr;
-    triang += N+1;
+    triang += ((N+3)/4)*8;
   }
 
   // process two rows per iteration
-  for (unsigned rhlen = N/2; ; --rhlen) {
-    auto y0 = &triang[0];
-    auto y1 = &triang[rhlen*2];
+  for (unsigned rlen = N & (-2); ; rlen -= 2) {
+    int xi   = rlen & 2;
+    int ylen = (rlen + 2) & (-4);
+    auto y0 = &triang[xi];
+    auto y1 = &y0[ylen*2];
+    auto aa0InvSqrt = y0[0+4]; // imag() of diag element contains inverse of its real()
+    auto x0 = &x[xi];
+    auto xr0_re = x0[0+0] * aa0InvSqrt;
+    auto xr0_im = x0[0+4] * aa0InvSqrt;
+    auto y01_re = y0[1+0];
+    auto y01_im = y0[1+4];
+    auto aa1InvSqrt = y1[1+4]; // imag() of diag element contains inverse of its real()
+    auto xr1_re = (x0[1+0] - y01_re*xr0_re + y01_im*xr0_im) * aa1InvSqrt;
+    auto xr1_im = (x0[1+4] - y01_re*xr0_im - y01_im*xr0_re) * aa1InvSqrt;
 
-    auto xr0 = x[0] * y0[0].imag(); // imag() of diag element contains inverse of real() part
-    auto xr1 = (x[1] - y0[1]*xr0) * y1[1].imag(); // odd row is padded
-
-    x[0] = xr0;
-    x[1] = xr1;
-    if (rhlen == 1)
+    int cqlen = rlen/4;
+    if (cqlen != 0) {
+      x += xi*4;
+      y0 = &triang[xi*4];
+      y1 = &y0[ylen*2];
+      for (int c = 0; c < cqlen; ++c) {
+        // x[c] = x[c] - y0[c]*xr0 - y1[c]*xr1;
+        for (int k = 0; k < 4; ++k) {
+          auto x_re = x[c*8+k+0];
+          auto x_im = x[c*8+k+4];
+          auto y0_re = y0[c*8+k+0];
+          auto y0_im = y0[c*8+k+4];
+          auto y1_re = y1[c*8+k+0];
+          auto y1_im = y1[c*8+k+4];
+          x[c*8+k+0] = x_re - y0_re*xr0_re + y0_im*xr0_im - y1_re*xr1_re + y1_im*xr1_im;
+          x[c*8+k+4] = x_im - y0_re*xr0_im - y0_im*xr0_re - y1_re*xr1_im - y1_im*xr1_re;
+        }
+      }
+    }
+    x0[0+0] = xr0_re;
+    x0[1+0] = xr1_re;
+    x0[0+4] = xr0_im;
+    x0[1+4] = xr1_im;
+    if (cqlen == 0)
       break;
-
-    y0 += 2;
-    y1 += 2;
-    x  += 2;
-    for (int c = 0; c < int(rhlen-1)*2; ++c)
-      x[c] = x[c] - y0[c]*xr0 - y1[c]*xr1;
-
-    triang += rhlen*4;
+    triang += ylen*4;
   }
-#endif
 }
 
 void chol_SolveBwd(double *x, unsigned N, const double* triang)
