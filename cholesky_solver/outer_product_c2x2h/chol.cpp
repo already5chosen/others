@@ -102,26 +102,24 @@ void PackUpperTriangle_Q(double* triang, const std::complex<double> *src, unsign
 { // pack upper triangle with diagonal
   // since the input is taken from lower triangle, it is a conjugate of what is referenced in classic algorithm
   // transpose - read rows, store column
-  #if 0
-  for (unsigned row = 0; row < n; ++row) {
-    std::complex<double>* pOut = &triang[row+ (n&1)];
-    for (unsigned col = 0; col < row+1; ++col) {
-      *pOut = *src++;
-      pOut += (n-col) & unsigned(-2); // 0:n-1, 1:n-1, 2:n-3, 3:n-3, ...
+  if (n & 3) {
+    auto pZero = triang;
+    for (unsigned row = 0; row < n; ++row) {
+      memset(pZero, 0, sizeof(*pZero)*8);
+      pZero += ((n-row+3) & unsigned(-4))*2;
     }
   }
-
-  auto pZero = triang;
-  unsigned step = n*2;
-  if ((n & 1)==0) {
-    pZero += n;
-    step  -= 2;
+  const unsigned xi0 = (0-n) & 3;
+  for (unsigned row = 0; row < n; ++row) {
+    const unsigned xi = xi0 + row;
+    auto pOut = &triang[(xi/4)*8+(xi%4)];
+    for (unsigned col = 0; col < row+1; ++col) {
+      pOut[0] = src[col].real();
+      pOut[4] = src[col].imag();
+      pOut += ((n-col+2) & unsigned(-4))*2;
+    }
+    src += row+1;
   }
-  for (;step >= 4; step -= 4) {
-    *pZero = 0;
-    pZero += step;
-  }
-  #endif
 }
 
 inline
