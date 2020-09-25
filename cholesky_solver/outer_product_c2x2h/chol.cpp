@@ -50,7 +50,7 @@ void PackUpperTriangle_C(double* triang, const std::complex<double> *src, unsign
   for (unsigned r = n; r > 0; --r) {
     memset(triang, 0, sizeof(double)*8);
     memcpy(&triang[((0-r)&3)*2], src, sizeof(*src)*r);
-    src += n;
+    src += n+1; // to next diagonal
     unsigned qr = (r + 3)/4;
     for (int i = 0; i < int(qr); ++i) {
       auto re0 = triang[0*2+0], im0 = triang[0*2+1];
