@@ -47,24 +47,35 @@ inline
 void PackUpperTriangle_C(double* triang, const std::complex<double> *src, unsigned n)
 { // pack upper triangle with diagonal
   // since the input is taken from lower triangle, it is a conjugate of what is referenced in classic algorithm
+  int src_i = 0;
   for (unsigned r = n; r > 0; --r) {
-    memset(triang, 0, sizeof(double)*8);
-    memcpy(&triang[((0-r)&3)*2], src, sizeof(*src)*r);
-    src += n+1; // to next diagonal
-    unsigned qr = (r + 3)/4;
-    for (int i = 0; i < int(qr); ++i) {
-      auto re0 = triang[0*2+0], im0 = triang[0*2+1];
-      auto re1 = triang[1*2+0], im1 = triang[1*2+1];
-      auto re2 = triang[2*2+0], im2 = triang[2*2+1];
-      auto re3 = triang[3*2+0], im3 = triang[3*2+1];
-      triang[0*4+0] = re0;
-      triang[0*4+1] = re1;
-      triang[0*4+2] = re2;
-      triang[0*4+3] = re3;
-      triang[1*4+0] = im0;
-      triang[1*4+1] = im1;
-      triang[1*4+2] = im2;
-      triang[1*4+3] = im3;
+    int qr = (r + 3)/4;
+    int pad_i = qr*4-r;
+    if (src_i < pad_i) {
+      for (int k = 0; k < 4; ++k) {
+        triang[k+0] = k < pad_i ? 0 : src[src_i+k-pad_i].real();
+        triang[k+4] = k < pad_i ? 0 : src[src_i+k-pad_i].imag();
+      }
+      triang += 8;
+      qr     -= 1;
+      pad_i  -= 4;
+    }
+    auto pSrc = &src[src_i-pad_i];
+    src_i += n+1; // to next diagonal
+    for (int i = 0; i < qr; ++i) {
+      auto x0 = pSrc[0];
+      auto x1 = pSrc[1];
+      auto x2 = pSrc[2];
+      auto x3 = pSrc[3];
+      triang[0*4+0] = x0.real();
+      triang[0*4+1] = x1.real();
+      triang[0*4+2] = x2.real();
+      triang[0*4+3] = x3.real();
+      triang[1*4+0] = x0.imag();
+      triang[1*4+1] = x1.imag();
+      triang[1*4+2] = x2.imag();
+      triang[1*4+3] = x3.imag();
+      pSrc   += 4;
       triang += 8;
     }
   }
@@ -74,24 +85,35 @@ inline
 void PackUpperTriangle_P(double* triang, const std::complex<double> *src, unsigned n)
 { // pack upper triangle with diagonal
   // since the input is taken from lower triangle, it is a conjugate of what is referenced in classic algorithm
+  int src_i = 0;
   for (unsigned r = n; r > 0; --r) {
-    memset(triang, 0, sizeof(double)*8);
-    unsigned qr = (r + 3)/4;
-    memcpy(&triang[(qr*4-r)*2], src, sizeof(*src)*r);
-    src += r;
-    for (int i = 0; i < int(qr); ++i) {
-      auto re0 = triang[0*2+0], im0 = triang[0*2+1];
-      auto re1 = triang[1*2+0], im1 = triang[1*2+1];
-      auto re2 = triang[2*2+0], im2 = triang[2*2+1];
-      auto re3 = triang[3*2+0], im3 = triang[3*2+1];
-      triang[0*4+0] = re0;
-      triang[0*4+1] = re1;
-      triang[0*4+2] = re2;
-      triang[0*4+3] = re3;
-      triang[1*4+0] = im0;
-      triang[1*4+1] = im1;
-      triang[1*4+2] = im2;
-      triang[1*4+3] = im3;
+    int qr = (r + 3)/4;
+    int pad_i = qr*4-r;
+    if (src_i < pad_i) {
+      for (int k = 0; k < 4; ++k) {
+        triang[k+0] = k < pad_i ? 0 : src[src_i+k-pad_i].real();
+        triang[k+4] = k < pad_i ? 0 : src[src_i+k-pad_i].imag();
+      }
+      triang += 8;
+      qr     -= 1;
+      pad_i  -= 4;
+    }
+    auto pSrc = &src[src_i-pad_i];
+    src_i += r;
+    for (int i = 0; i < qr; ++i) {
+      auto x0 = pSrc[0];
+      auto x1 = pSrc[1];
+      auto x2 = pSrc[2];
+      auto x3 = pSrc[3];
+      triang[0*4+0] = x0.real();
+      triang[0*4+1] = x1.real();
+      triang[0*4+2] = x2.real();
+      triang[0*4+3] = x3.real();
+      triang[1*4+0] = x0.imag();
+      triang[1*4+1] = x1.imag();
+      triang[1*4+2] = x2.imag();
+      triang[1*4+3] = x3.imag();
+      pSrc   += 4;
       triang += 8;
     }
   }
