@@ -593,27 +593,37 @@ void chol_SolveBwd(double *x, unsigned N, const double* triang)
     triang -= ylen*4; // point to diag element
     int xi = rhlen & 1;
     auto x0 = &x[xi*2];
-    auto acc0_re = x0[0+0]; auto acc1_re = x0[1+0];
-    auto acc0_im = x0[0+4]; auto acc1_im = x0[1+4];
+    auto acc0_rere = x0[0+0]; auto acc1_rere = x0[1+0];
+    auto acc0_imre = x0[0+4]; auto acc1_imre = x0[1+4];
     x0[0+0]=x0[1+0] = 0;
     x0[0+4]=x0[1+4] = 0;
     x += xi*8;
     auto y0 = &triang[xi*8];
     auto y1 = &y0[ylen*2];
     int cqlen = rhlen/2;
+    double acc0_imim = 0, acc1_imim = 0;
+    double acc0_reim = 0, acc1_reim = 0;
     for (int c = 0; c < cqlen; ++c) {
       // acc0 -= x[c] * conj(y0[c]);
       // acc1 -= x[c] * conj(y1[c]);
       for (int k = 0; k < 4; ++k) {
-        acc0_re = acc0_re - x[c*8+k+0]*y0[c*8+k+0] - x[c*8+k+4]*y0[c*8+k+4];
-        acc1_re = acc1_re - x[c*8+k+0]*y1[c*8+k+0] - x[c*8+k+4]*y1[c*8+k+4];
-        acc0_im = acc0_im + x[c*8+k+0]*y0[c*8+k+4] - x[c*8+k+4]*y0[c*8+k+0];
-        acc1_im = acc1_im + x[c*8+k+0]*y1[c*8+k+4] - x[c*8+k+4]*y1[c*8+k+0];
+        acc0_rere -= x[c*8+k+0]*y0[c*8+k+0];
+        acc1_rere -= x[c*8+k+0]*y1[c*8+k+0];
+        acc0_reim += x[c*8+k+0]*y0[c*8+k+4];
+        acc1_reim += x[c*8+k+0]*y1[c*8+k+4];
+        acc0_imre -= x[c*8+k+4]*y0[c*8+k+0];
+        acc1_imre -= x[c*8+k+4]*y1[c*8+k+0];
+        acc0_imim += x[c*8+k+4]*y0[c*8+k+4];
+        acc1_imim += x[c*8+k+4]*y1[c*8+k+4];
       }
     }
     y0 = &triang[xi*2];
     y1 = &y0[ylen*2];
     auto aa1InvSqrt = y1[1+4]; // imag() of diag element contains inverse of its real()
+    auto acc1_re = acc1_rere - acc1_imim;
+    auto acc1_im = acc1_imre + acc1_reim;
+    auto acc0_re = acc0_rere - acc0_imim;
+    auto acc0_im = acc0_imre + acc0_reim;
     acc1_re *= aa1InvSqrt;
     acc1_im *= aa1InvSqrt;
     // acc0 -= acc1*conj(y0[1]);
