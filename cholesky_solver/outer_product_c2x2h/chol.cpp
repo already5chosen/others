@@ -247,6 +247,8 @@ const double DIAG_SUBST =  1E40;
 
 inline bool chol_FactorizeAndSolveFwd(double* triang, unsigned N, double* result, const bool solveFwd)
 {
+  if (N == 0)
+    return false;
   bool succ = true;
   if ((N & 1) != 0) { // special handling for the first row of matrix with odd number of elements
     // process top row
@@ -333,18 +335,18 @@ inline bool chol_FactorizeAndSolveFwd(double* triang, unsigned N, double* result
     } while (hlen > 0);
   }
 
-  for (unsigned rhlen = N/2; ; rhlen-=1) {
+  for (int rlen = N & -2; ; rlen -=2) {
     // process top row
-    int xi = rhlen & 1;
-    int rlen = ((rhlen+1)/2)*4;
+    int xi   = rlen & 2;
+    int xlen = rlen + xi;
     auto x0 = &triang[0];
-    auto x1 = &triang[rlen*2];
+    auto x1 = &x0[xlen*2];
 
-    double aa0 = x0[4*0+xi*2+0]; // diagonal element
-    auto f_re  = x0[4*0+xi*2+1];
-    auto f_im  = x0[4*1+xi*2+1];
+    double aa0 = x0[4*0+xi+0]; // diagonal element
+    auto f_re  = x0[4*0+xi+1];
+    auto f_im  = x0[4*1+xi+1];
     // process next after top row
-    double aa1 = x1[4*0+xi*2+1]; // diagonal element
+    double aa1 = x1[4*0+xi+1]; // diagonal element
     // subtract outer product of top row from next after top row
     aa1 = aa1*aa0 - f_re*f_re - f_im*f_im;
     // check that we are positive definite
@@ -361,29 +363,29 @@ inline bool chol_FactorizeAndSolveFwd(double* triang, unsigned N, double* result
     }
     double aa0InvSqrt = aaInvSqrt[0];
     double aa1InvSqrt = aaInvSqrt[1]*aaSqrt[0];
-    x0[4*0+xi*2+0] = aaSqrt[0];
-    x0[4*1+xi*2+0] = aa0InvSqrt;
-    x1[4*0+xi*2+1] = aaSqrt[1]*aa0InvSqrt;
-    x1[4*1+xi*2+1] = aa1InvSqrt;
-    x0[4*0+xi*2+1] = (f_re *= aa0InvSqrt);
-    x0[4*1+xi*2+1] = (f_im *= aa0InvSqrt);
+    x0[4*0+xi+0] = aaSqrt[0];
+    x0[4*1+xi+0] = aa0InvSqrt;
+    x1[4*0+xi+1] = aaSqrt[1]*aa0InvSqrt;
+    x1[4*1+xi+1] = aa1InvSqrt;
+    x0[4*0+xi+1] = (f_re *= aa0InvSqrt);
+    x0[4*1+xi+1] = (f_im *= aa0InvSqrt);
 
     double r0_re, r0_im, r1_re, r1_im;
     if (solveFwd) {
       // auto r0 = result[0] * aa0InvSqrt;
       // auto r1 = (result[1] - f*r0) * aa1InvSqrt;
-      result[4*0+xi*2+0] = r0_re = result[4*0+xi*2+0] * aa0InvSqrt;
-      result[4*1+xi*2+0] = r0_im = result[4*1+xi*2+0] * aa0InvSqrt;
-      result[4*0+xi*2+1] = r1_re = (result[4*0+xi*2+1] - f_re*r0_re + f_im*r0_im) * aa1InvSqrt;
-      result[4*1+xi*2+1] = r1_im = (result[4*1+xi*2+1] - f_re*r0_im - f_im*r0_re) * aa1InvSqrt;
+      result[4*0+xi+0] = r0_re =  result[4*0+xi+0] * aa0InvSqrt;
+      result[4*1+xi+0] = r0_im =  result[4*1+xi+0] * aa0InvSqrt;
+      result[4*0+xi+1] = r1_re = (result[4*0+xi+1] - f_re*r0_re + f_im*r0_im) * aa1InvSqrt;
+      result[4*1+xi+1] = r1_im = (result[4*1+xi+1] - f_re*r0_im - f_im*r0_re) * aa1InvSqrt;
     }
 
-    if (rhlen<=1)
+    if (rlen <= 2)
       break; // x1 was last row
 
-    x0 += xi*8;
-    x1 += xi*8;
-    int cqlen = rhlen / 2;
+    x0 = &triang[xi*4];
+    x1 = &x0[xlen*2];
+    int cqlen = rlen / 4;
     for (int c = 0; c < cqlen; ++c) {
       // auto ax0 = x0[c] * aa0InvSqrt;
       // auto ax1 = x1[c];
@@ -400,17 +402,17 @@ inline bool chol_FactorizeAndSolveFwd(double* triang, unsigned N, double* result
         x1[c*8+4*1+k] = (x1_im + x0_re*f_im - x0_im*f_re) * aa1InvSqrt;
       }
     }
-    triang[4*0+xi*2+0] = aaSqrt[0];
-    triang[4*1+xi*2+0] = aa0InvSqrt;
-    triang[4*0+xi*2+1] = f_re;
-    triang[4*1+xi*2+1] = f_im;
-    triang += rlen*2;
-    triang[4*0+xi*2+1] = aaSqrt[1]*aa0InvSqrt;
-    triang[4*1+xi*2+1] = aa1InvSqrt;
-    triang += rlen*2;
+    triang[4*0+xi+0] = aaSqrt[0];
+    triang[4*1+xi+0] = aa0InvSqrt;
+    triang[4*0+xi+1] = f_re;
+    triang[4*1+xi+1] = f_im;
+    triang += xlen*2;
+    triang[4*0+xi+1] = aaSqrt[1]*aa0InvSqrt;
+    triang[4*1+xi+1] = aa1InvSqrt;
+    triang += xlen*2;
     if (solveFwd) {
       // Forward propagation of pair of results
-      auto pr = &result[xi*8];
+      auto pr = &result[xi*4];
       for (int c = 0; c < cqlen; ++c) {
         // result[c] -= x0[c]*r0 + x1[c]*r1;
         for (int k = 0; k < 4; ++k) {
@@ -424,58 +426,58 @@ inline bool chol_FactorizeAndSolveFwd(double* triang, unsigned N, double* result
           pr[c*8+4*1+k] = r_im - x0_re*r0_im - x0_im*r0_re - x1_re*r1_im - x1_im*r1_re;
         }
       }
-      result[4*0+xi*2+0] = r0_re;
-      result[4*0+xi*2+1] = r1_re;
-      result[4*1+xi*2+0] = r0_im;
-      result[4*1+xi*2+1] = r1_im;
+      result[4*0+xi+0] = r0_re;
+      result[4*0+xi+1] = r1_re;
+      result[4*1+xi+0] = r0_im;
+      result[4*1+xi+1] = r1_im;
       result = pr;
     }
 
     // subtract outer product of two top rows from lower part of the matrix
     // process two output rows together
     auto y = triang;
-    for (unsigned chlen = rhlen-1; chlen > 0; chlen -= 1) {
-      int xi = chlen & 1;
-      auto f00_re = x0[4*0+xi*2+0];
-      auto f10_re = x1[4*0+xi*2+0];
-      auto f01_re = x0[4*0+xi*2+1];
-      auto f11_re = x1[4*0+xi*2+1];
-      auto f00_im = x0[4*1+xi*2+0];
-      auto f10_im = x1[4*1+xi*2+0];
-      auto f01_im = x0[4*1+xi*2+1];
-      auto f11_im = x1[4*1+xi*2+1];
-      int cqlen = (chlen+1)/2;
+    for (int clen = rlen-2; clen > 0; clen -= 2) {
+      auto x1 = &x0[xlen*2];
+      int xi = clen & 2;
+      auto f00_re = x0[4*0+xi+0];
+      auto f10_re = x1[4*0+xi+0];
+      auto f01_re = x0[4*0+xi+1];
+      auto f11_re = x1[4*0+xi+1];
+      auto f00_im = x0[4*1+xi+0];
+      auto f10_im = x1[4*1+xi+0];
+      auto f01_im = x0[4*1+xi+1];
+      auto f11_im = x1[4*1+xi+1];
+      int ylen2 = (clen + xi)*2;
       auto y0 = &y[0];
-      auto y1 = &y[cqlen*8];
-      for (int c = 0; c < cqlen; ++c) {
+      auto y1 = &y[ylen2];
+      for (int c = 0; c < ylen2; c += 8) {
         // y0[c] = y0[c] - x0[c]*conj(f00) - x1[c]*conj(f10);
         // y1[c] = y1[c] - x0[c]*conj(f01) - x1[c]*conj(f11);
         for (int k = 0; k < 4; ++k) {
-          auto x0_re = x0[c*8+4*0+k];
-          auto x0_im = x0[c*8+4*1+k];
-          auto y0_re = y0[c*8+4*0+k];
-          auto y0_im = y0[c*8+4*1+k];
-          auto y1_re = y1[c*8+4*0+k];
-          auto y1_im = y1[c*8+4*1+k];
+          auto x0_re = x0[c+4*0+k];
+          auto x0_im = x0[c+4*1+k];
+          auto y0_re = y0[c+4*0+k];
+          auto y0_im = y0[c+4*1+k];
+          auto y1_re = y1[c+4*0+k];
+          auto y1_im = y1[c+4*1+k];
           y0_re = y0_re - x0_re * f00_re - x0_im * f00_im;
           y0_im = y0_im + x0_re * f00_im - x0_im * f00_re;
           y1_re = y1_re - x0_re * f01_re - x0_im * f01_im;
           y1_im = y1_im + x0_re * f01_im - x0_im * f01_re;
-          auto x1_re = x1[c*8+4*0+k];
-          auto x1_im = x1[c*8+4*1+k];
+          auto x1_re = x1[c+4*0+k];
+          auto x1_im = x1[c+4*1+k];
           y0_re = y0_re - x1_re * f10_re - x1_im * f10_im;
           y0_im = y0_im + x1_re * f10_im - x1_im * f10_re;
           y1_re = y1_re - x1_re * f11_re - x1_im * f11_im;
           y1_im = y1_im + x1_re * f11_im - x1_im * f11_re;
-          y0[c*8+4*0+k] = y0_re;
-          y0[c*8+4*1+k] = y0_im;
-          y1[c*8+4*0+k] = y1_re;
-          y1[c*8+4*1+k] = y1_im;
+          y0[c+4*0+k] = y0_re;
+          y0[c+4*1+k] = y0_im;
+          y1[c+4*0+k] = y1_re;
+          y1[c+4*1+k] = y1_im;
         }
       }
-      y += cqlen*4*4;
-      x0 += xi * 8;
-      x1 += xi * 8;
+      y  += ylen2*2;
+      x0 += xi * 4;
     }
   }
 
