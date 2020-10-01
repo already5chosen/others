@@ -9,7 +9,7 @@
 
 #include "chol.h"
 
-const int MIN_N = 5;
+const int MIN_N = 1;
 const int MAX_N = 128;
 
 static void GenerateHermitianMatrix(std::complex<double> *mat, int n, std::mt19937_64& gen);
