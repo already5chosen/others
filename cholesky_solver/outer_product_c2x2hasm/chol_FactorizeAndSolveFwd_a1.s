@@ -83,14 +83,9 @@ chol_FactorizeAndSolveFwd_a:
    vdivsd     %xmm14,%xmm1, %xmm0       # xmm0 = aaInvSqrt=1/sqrt(aa) ...
    vmulsd    8(%r8,%rbp),%xmm0, %xmm1   # ymm1 = r0_re = result[xix+1+0] * aaInvSqrt, 0, 0, 0
    vmulsd   40(%r8,%rbp),%xmm0, %xmm2   # ymm2 = r0_im = result[xix+1+4] * aaInvSqrt, 0, 0, 0
-   # store first values
-   vmovsd     %xmm14, 8(%rcx,%rbp)      # triang[xi+1+0] = aaSqrt
-   vmovsd     %xmm0, 40(%rcx,%rbp)      # triang[xi+1+4] = aaInvSqrt - store inverse of diagonal at imag()
-   vmovsd     %xmm1,  8(%r8, %rbp)      # result[xix+1+0] = r0_re
-   vmovsd     %xmm2, 40(%r8, %rbp)      # result[xix+1+4] = r0_im
 
    sub $16,   %edx                      # edx = rlenx -= 2*sizeof(double) = (N-1)*sizeof(double)
-   jz .done                             # N==1, nothing more to do
+   jz .odd_done                         # N==1, nothing more to do
 
    # Combine multiplication by invSqrt with Forward propagation
    mov        %r8,  %rsi
@@ -129,7 +124,7 @@ chol_FactorizeAndSolveFwd_a:
    sub      $32,  %rax                  # cnt -= 4
    jg      .odd_top_rows_loop
 
-   # repeat store of first values since when xix==0 originals are destroyed
+   # store first values
    vmovsd     %xmm14, 8(%rcx,%rbp)      # triang[xi+1+0] = aaSqrt
    vmovsd     %xmm0, 40(%rcx,%rbp)      # triang[xi+1+4] = aaInvSqrt - store inverse of diagonal at imag()
    vmovsd     %xmm1,  8(%r8, %rbp)      # result[xix+1+0] = r0_re
@@ -193,6 +188,14 @@ chol_FactorizeAndSolveFwd_a:
   sub      $16, %r10d                   # clenx -= 2*sizeof(double)
   jnz .caxpy1x2_outer_loop
   jmp .even_loop_entry
+
+  .odd_done:
+   # store first values
+   vmovsd     %xmm14, 8(%rcx,%rbp)      # triang[xi+1+0] = aaSqrt
+   vmovsd     %xmm0, 40(%rcx,%rbp)      # triang[xi+1+4] = aaInvSqrt - store inverse of diagonal at imag()
+   vmovsd     %xmm1,  8(%r8, %rbp)      # result[xix+1+0] = r0_re
+   vmovsd     %xmm2, 40(%r8, %rbp)      # result[xix+1+4] = r0_im
+  jmp .done
 
 .even_loop:
 # RAX  - xlenx = (x1-x0)*sizeof(double)
