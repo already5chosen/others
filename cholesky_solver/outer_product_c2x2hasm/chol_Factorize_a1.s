@@ -36,12 +36,8 @@ chol_Factorize_a:
   .seh_pushreg %rdi
   pushq %rbp
   .seh_pushreg %rbp
-  pushq %r12
-  .seh_pushreg %r12
-  subq  $16*9, %rsp
-  .seh_stackalloc 16*9
-  vmovapd %xmm14,      16*8(%rsp)
-  .seh_savexmm %xmm14, 16*8
+  subq  $16*8+8, %rsp
+  .seh_stackalloc 16*8+8
   vmovapd %xmm13,      16*7(%rsp)
   .seh_savexmm %xmm13, 16*7
   vmovapd %xmm12,      16*6(%rsp)
@@ -174,14 +170,13 @@ chol_Factorize_a:
 # YMM1 - aa1InvSqrt x2, 0,0
 # YMM2 - f_re       x2, 0,0
 # YMM3 - f_im       x2, 0,0
-# YMM13- x aa1Sqrt,     0,0
-# YMM14- aa0Sqrt x,     0,0
+# YMM10- x aa1Sqrt,     0,0
+# YMM11- aa0Sqrt x,     0,0
   # Handle a pair of top rows
   vperm2f128 $0,%ymm0,%ymm0,%ymm0       # ymm0 = aa0InvSqrt x4
   vperm2f128 $0,%ymm1,%ymm1,%ymm1       # ymm1 = aa1InvSqrt x4
   vperm2f128 $0,%ymm2,%ymm2,%ymm2       # ymm2 = f_re       x4
   vperm2f128 $0,%ymm3,%ymm3,%ymm3       # ymm3 = f_im       x4
-  vblendpd   $1,%xmm14,%xmm13,%xmm14    # ymm14= aa0Sqrt aa1Sqrt 0 0
 
   lea (%rcx,%r9,4),%rbx                 # rbx  = x0 = &triang[(rlen & 2)*4]
   mov  %edx,       %edi
@@ -191,29 +186,29 @@ chol_Factorize_a:
     ## ax1 = x1[k];
     ## x0[k] = ax0;
     ## x1[k] = (ax1 - ax0*conj(f))*aa1InvSqrt;
-    vmulpd    (%rbx),    %ymm0, %ymm8   # ymm8 = x0_re = x0[c*8+0]*aa0InvSqrt
-    vmulpd  32(%rbx),    %ymm0, %ymm9   # ymm9 = x0_im = x0[c*8+4]*aa0InvSqrt
-    vmovupd   (%rbx,%rax),      %ymm10  # ymm10= x1_re = x1[c*8+0]
-    vmovupd 32(%rbx,%rax),      %ymm11  # ymm11= x1_im = x1[c*8+4]
+    vmulpd    (%rbx),    %ymm0, %ymm4   # ymm4 = x0_re = x0[c*8+0]*aa0InvSqrt
+    vmulpd  32(%rbx),    %ymm0, %ymm5   # ymm5 = x0_im = x0[c*8+4]*aa0InvSqrt
+    vmovupd   (%rbx,%rax),      %ymm6   # ymm6= x1_re = x1[c*8+0]
+    vmovupd 32(%rbx,%rax),      %ymm8   # ymm8= x1_im = x1[c*8+4]
 
-    vmulpd    %ymm8, %ymm2, %ymm12
-    vsubpd    %ymm12,%ymm10,%ymm10      # ymm10= x1_re -= x0_re*f_re
-    vmulpd    %ymm8, %ymm3, %ymm12
-    vaddpd    %ymm12,%ymm11,%ymm11      # ymm11= x1_im += x0_re*f_im
+    vmulpd    %ymm4, %ymm2, %ymm7
+    vsubpd    %ymm7, %ymm6, %ymm6       # ymm6= x1_re -= x0_re*f_re
+    vmulpd    %ymm4, %ymm3, %ymm7
+    vaddpd    %ymm7, %ymm8, %ymm8       # ymm8= x1_im += x0_re*f_im
 
-    vmulpd    %ymm9, %ymm3, %ymm12
-    vsubpd    %ymm12,%ymm10,%ymm10      # ymm10= x1_re -= x0_im*f_im
-    vmulpd    %ymm9, %ymm2, %ymm12
-    vsubpd    %ymm12,%ymm11,%ymm11      # ymm11= x1_im -= x0_im*f_re
+    vmulpd    %ymm5, %ymm3, %ymm7
+    vsubpd    %ymm7, %ymm6, %ymm6       # ymm6= x1_re -= x0_im*f_im
+    vmulpd    %ymm5, %ymm2, %ymm7
+    vsubpd    %ymm7, %ymm8, %ymm7       # ymm7= x1_im -= x0_im*f_re
 
-    vmulpd    %ymm1, %ymm10,%ymm10      # ymm10= x1_re *= aa1InvSqrt
-    vmulpd    %ymm1, %ymm11,%ymm11      # ymm11= x1_im *= aa1InvSqrt
+    vmulpd    %ymm1, %ymm6, %ymm6       # ymm6= x1_re *= aa1InvSqrt
+    vmulpd    %ymm1, %ymm7, %ymm7       # ymm8= x1_im *= aa1InvSqrt
 
-    vmovupd   %ymm8,  (%rbx)            # x0[c*8+0] = x0_re
-    vmovupd   %ymm9,32(%rbx)            # x0[c*8+4] = x0_im
+    vmovupd   %ymm4,  (%rbx)            # x0[c*8+0] = x0_re
+    vmovupd   %ymm5, 32(%rbx)           # x0[c*8+4] = x0_im
 
-    vmovupd   %ymm10,  (%rbx,%rax)      # x1[c*8+0] = x1_re
-    vmovupd   %ymm11,32(%rbx,%rax)      # x1[c*8+4] = x1_im
+    vmovupd   %ymm6,   (%rbx,%rax)      # x1[c*8+0] = x1_re
+    vmovupd   %ymm7, 32(%rbx,%rax)      # x1[c*8+4] = x1_im
 
     add $64, %rbx                       # c += 1
   dec %edi
@@ -221,11 +216,11 @@ chol_Factorize_a:
 
   # store last diag and near diag
   lea (%rcx,%r9),   %rsi                # rsi  = x0 = &triang[xi]
-  vblendpd $1, %xmm14,%xmm2, %xmm2      # ymm2 = aa0Sqrt,   f_re,0,0
+  vblendpd $1, %xmm11,%xmm2, %xmm2      # ymm2 = aa0Sqrt,   f_re,0,0
   vblendpd $1, %xmm0, %xmm3, %xmm3      # ymm3 = aa0InvSqrt,f_im,0,0
   vmovupd  %xmm2,   (%rsi)              # x0[0:1] = [aa0Sqrt,    f_re]
   vmovupd  %xmm3, 32(%rsi)              # x0[4:5] = [aa0InvSqrt, f_im]
-  vmovupd  %xmm14,  (%rsi,%rax)         # x1[0:1] = [x        aa1Sqrt]
+  vmovupd  %xmm10,  (%rsi,%rax)         # x1[0:1] = [x        aa1Sqrt]
   vmovsd   %xmm1, 40(%rsi,%rax)         # x1[5]   = aa1InvSqrt
 
   lea (%rcx,%r9, 4), %r10               # r10  = x0 = &triang[(rlen & 2)*4]
@@ -238,7 +233,7 @@ chol_Factorize_a:
 # RDX  - rlenx = rlen*sizeof(double) >= 4*sizeof(double)
 # R10  - x0
 # R11  - ltMask
-# RBX, RSI, RDI, RBP, R8, R9, R12 - free
+# RBX, RSI, RDI, RBP, R8, R9 - free
   lea (,%edx,4),%edi                    # RDI  = yix == (y0-x0)*sizeof(double) = rlenx*4
   sub $16, %edx                         # RDX  = rlenx -= 2*sizeof(double)
   jz .caxpy2x2_outer_loop_done
@@ -246,8 +241,8 @@ chol_Factorize_a:
   mov %edx,%r9d
   and $16, %r9d                         # R9   = xix = (clen & 2)*sizeof(double)
   .caxpy2x2_outer_loop:
-    lea (%esi,%r9d),   %r12d            # R12  = ylenx = ((clen+2) & -4)*sizeof(double) = clenx+xix = ((y1-y0)/2)*sizeof(double)
-    lea (%edi,%r12d,2),%ebp             # RBP  = y1-x0 = (y0-x0)+(y1-y0) = (y0-x0)+ylenx*2
+    lea (%esi,%r9d),   %r8d             # R8   = ylenx = ((clen+2) & -4)*sizeof(double) = clenx+xix = ((y1-y0)/2)*sizeof(double)
+    lea (%edi,%r8d, 2),%ebp             # RBP  = y1-x0 = (y0-x0)+(y1-y0) = (y0-x0)+ylenx*2
     lea (%r10,%r9),    %rbx             # RBX  = &x0[xi]
     vbroadcastsd   (%rbx),      %ymm0   # ymm0 = f00_re = x0[xi+0+0] x4
     vbroadcastsd 32(%rbx),      %ymm1   # ymm1 = f00_im = x0[xi+0+4] x4
@@ -315,7 +310,7 @@ chol_Factorize_a:
       vmovupd %ymm10,  (%rbx,%rbp)      # y1[c*8+0] = y1_re
       vmovupd %ymm11,32(%rbx,%rbp)      # y1[c*8+4] = y1_im
       add $64, %rbx                     # c += 1
-    sub $32,   %r12d                    # ylenx -= 4*sizeof(double)
+    sub $32,   %r8d                     # ylenx -= 4*sizeof(double)
     jnz .caxpy2x2_inner_loop
 
     lea (%r10,%r9, 4),%r10              # R10  = x0    += xi*4
@@ -330,7 +325,7 @@ chol_Factorize_a:
 # RCX - triang
 # RDX - rlenx = rlen*sizeof(double)
 # R11 - ltMask
-# RAX, RBX, RDI, RSI, RBP, R8, R9, R10, R12 - free
+# RAX, RBX, RDI, RSI, RBP, R8, R9, R10 - free
   # process diagonal and near-diagonal of 2 top rows
   mov  %edx,        %r9d
   and  $16,         %r9d                # r9   = xix = index of diagonal element of x0 in triang[] * sizeof(double)
@@ -355,17 +350,17 @@ chol_Factorize_a:
   vblendvpd %xmm1, %xmm4, %xmm0,%xmm0   # xmm0 = aa[0:1] < DIAG_MIN ? DIAG_SUBST : aa[0:1]
   vmovmskpd %xmm1, %esi
   or        %esi,  %r11d
-  vsqrtpd   %xmm0, %xmm14               # ymm14= sqrt(aa0), sqrt(aa1), 0, 0
+  vsqrtpd   %xmm0, %xmm11               # ymm11= sqrt(aa0), sqrt(aa1), 0, 0
   vmovddup  .LONE(%rip), %xmm1
-  vdivpd    %xmm14,%xmm1,%xmm1          # xmm1 = [1/sqrt(aa0), 1/sqrt(aa1)]
+  vdivpd    %xmm11,%xmm1,%xmm1          # xmm1 = [1/sqrt(aa0), 1/sqrt(aa1)]
 
   vmulsd    %xmm1, %xmm2,%xmm2          # xmm2  = f_re*=aa0InvSqrt 0 0 0
   vmulsd    %xmm1, %xmm3,%xmm3          # xmm3  = f_im*=aa0InvSqrt 0 0 0
 
   vmovddup  %xmm1, %xmm0                # ymm0 = 1/sqrt(aa0), 1/sqrt(aa0) = aa0InvSqrt x2, 0,0
   vunpckhpd %xmm1, %xmm1, %xmm1         # ymm1 = 1/sqrt(aa1), 1/sqrt(aa1) 0,0
-  vmulsd    %xmm14,%xmm1, %xmm1         # ymm1 = aa1InvSqrt = 1/sqrt(aa1)*aa0Sqrt, 0,0,0
-  vmulpd    %xmm0, %xmm14,%xmm13        # ymm13= x aa1Sqrt=sqrt(aa1)*aa0InvSqrt, 0,0
+  vmulsd    %xmm11,%xmm1, %xmm1         # ymm1 = aa1InvSqrt = 1/sqrt(aa1)*aa0Sqrt, 0,0,0
+  vmulpd    %xmm0, %xmm11,%xmm10        # ymm10= x aa1Sqrt=sqrt(aa1)*aa0InvSqrt, 0,0
   vmovddup  %xmm1, %xmm1                # ymm1 = aa1InvSqrt x2, 0,0
   vmovddup  %xmm2, %xmm2                # ymm2 = f_re       x2, 0,0
   vmovddup  %xmm3, %xmm3                # ymm3 = f_im       x2, 0,0
@@ -374,11 +369,11 @@ chol_Factorize_a:
   jg       .even_loop                   # x1 was not a last row
 
   # store last diag and near diag
-  vblendpd $1, %xmm14,%xmm2, %xmm2      # ymm2 = aa0Sqrt,   f_re,0,0
+  vblendpd $1, %xmm11,%xmm2, %xmm2      # ymm2 = aa0Sqrt,   f_re,0,0
   vblendpd $1, %xmm0, %xmm3, %xmm3      # ymm3 = aa0InvSqrt,f_im,0,0
   vmovupd  %xmm2,   (%rbx)              # x0[0:1] = [aa0Sqrt,    f_re]
   vmovupd  %xmm3, 32(%rbx)              # x0[4:5] = [aa0InvSqrt, f_im]
-  vmovupd  %xmm13,  (%rbx,%rax)         # x1[0:1] = [x        aa1Sqrt]
+  vmovupd  %xmm10,  (%rbx,%rax)         # x1[0:1] = [x        aa1Sqrt]
   vmovsd   %xmm1, 40(%rbx,%rax)         # x1[5]   = aa1InvSqrt
 
 .done:
@@ -394,9 +389,7 @@ chol_Factorize_a:
   vmovaps 5*16(%rsp), %xmm11
   vmovaps 6*16(%rsp), %xmm12
   vmovaps 7*16(%rsp), %xmm13
-  vmovaps 8*16(%rsp), %xmm14
-  addq  $16*9, %rsp
-  popq  %r12
+  addq  $16*8+8, %rsp
   popq  %rbp
   popq  %rdi
   popq  %rsi
