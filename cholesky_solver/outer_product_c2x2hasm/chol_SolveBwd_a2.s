@@ -5,7 +5,7 @@
   .endef
   .globl  @feat.00
 .set @feat.00, 0
-  .file "chol_SolveBwd_a1.s"
+  .file "chol_SolveBwd_a2.s"
   .def   chol_SolveBwd_a;
   .scl  2;
   .type 32;
@@ -97,35 +97,27 @@ chol_SolveBwd_a:
     .cloop:
       # acc0 -= x[c] * conj(y0[c]);
       # acc1 -= x[c] * conj(y1[c]);
-      vmovupd   (%rbx, %r8),   %ymm10 # ymm10 = y0_re = y0[c+0:3]
-      vmovupd   (%rbx),        %ymm8  # ymm8  = x_re  = x[c+0:3]
-      vmovupd 32(%rbx),        %ymm9  # ymm9  = x_im  = x[c+4:7]
+      vmovupd   (%rbx, %r8),    %ymm10 # ymm10 = y0_re = y0[c+0:3]
+      vmovupd   (%rbx),         %ymm8  # ymm8  = x_re  = x[c+0:3]
+      vmovupd 32(%rbx),         %ymm9  # ymm9  = x_im  = x[c+4:7]
 
-      vmulpd     %ymm8, %ymm10,%ymm11 # ymm11 = x_re*y0_re
-      vsubpd     %ymm11,%ymm0, %ymm0  # ymm0  = acc0_rere -= x_re*y0_re
-      vmulpd     %ymm9, %ymm10,%ymm11 # ymm11 = x_im*y0_re
-      vsubpd     %ymm11,%ymm1, %ymm1  # ymm1  = acc0_imre -= x_im*y0_re
+      vfnmadd231pd %ymm8,%ymm10,%ymm0  # ymm0  = acc0_rere -= x_re*y0_re
+      vfnmadd231pd %ymm9,%ymm10,%ymm1  # ymm1  = acc0_imre -= x_im*y0_re
 
-      vmovupd 32(%rbx, %r8),   %ymm10 # ymm10 = y0_im = y0[c+4:7]
-      vmulpd     %ymm8, %ymm10,%ymm11 # ymm11 = x_re*y0_im
-      vaddpd     %ymm11,%ymm4, %ymm4  # ymm4  = acc0_reim += x_re*y0_im
-      vmulpd     %ymm9, %ymm10,%ymm11 # ymm11 = x_im*y0_im
-      vaddpd     %ymm11,%ymm5, %ymm5  # ymm5  = acc0_imim += x_im*y0_im
+      vmovupd 32(%rbx, %r8),    %ymm10 # ymm10 = y0_im = y0[c+4:7]
+      vfmadd231pd  %ymm8,%ymm10,%ymm4  # ymm4  = acc0_reim += x_re*y0_im
+      vfmadd231pd  %ymm9,%ymm10,%ymm5  # ymm5  = acc0_imim += x_im*y0_im
 
-      vmovupd   (%rbx, %r9),   %ymm10 # ymm10 = y1_re = y1[c+0:3]
-      vmulpd     %ymm8, %ymm10,%ymm11 # ymm11 = x_re*y1_re
-      vsubpd     %ymm11,%ymm2, %ymm2  # ymm2  = acc1_rere -= x_re*y1_re
-      vmulpd     %ymm9, %ymm10,%ymm11 # ymm11 = x_im*y1_re
-      vsubpd     %ymm11,%ymm3, %ymm3  # ymm3  = acc1_imre -= x_im*y1_re
+      vmovupd   (%rbx, %r9),    %ymm10 # ymm10 = y1_re = y1[c+0:3]
+      vfnmadd231pd %ymm8,%ymm10,%ymm2  # ymm2  = acc1_rere -= x_re*y1_re
+      vfnmadd231pd %ymm9,%ymm10,%ymm3  # ymm3  = acc1_imre -= x_im*y1_re
 
-      vmovupd 32(%rbx, %r9),   %ymm10 # ymm10 = y1_im = y1[c+4:7]
-      vmulpd     %ymm8, %ymm10,%ymm11 # ymm11 = x_re*y1_im
-      vaddpd     %ymm11,%ymm6, %ymm6  # ymm6  = acc1_reim += x_re*y1_im
-      vmulpd     %ymm9, %ymm10,%ymm11 # ymm11 = x_im*y1_im
-      vaddpd     %ymm11,%ymm7, %ymm7  # ymm7  = acc1_imim += x_im*y1_im
+      vmovupd 32(%rbx, %r9),    %ymm10 # ymm10 = y1_im = y1[c+4:7]
+      vfmadd231pd  %ymm8,%ymm10,%ymm6  # ymm6  = acc1_reim += x_re*y1_im
+      vfmadd231pd  %ymm9,%ymm10,%ymm7  # ymm7  = acc1_imim += x_im*y1_im
 
-      add      $64,   %rbx            # rbx  = &x[c] += 8
-    dec               %edx            # edx  = cnt -= 1
+      add      $64,   %rbx             # rbx  = &x[c] += 8
+    dec               %edx             # edx  = cnt -= 1
     jnz .cloop
     # reduce accumulators and pack re/im
     vsubpd     %ymm5, %ymm0, %ymm0         # ymm0 = acc0_re = acc0_rere - acc0_imim
@@ -160,8 +152,7 @@ chol_SolveBwd_a:
     vmovddup     8(%rbx,%r8),       %xmm2 # ymm2 = y_re       x2 0 0 = y0[xi+1+0]
     vmovddup    40(%rbx,%r8),       %xmm3 # ymm3 = y_im       x2 0 0 = y0[xi+1+4]
     vmovddup    32(%rbx,%r8),       %xmm4 # ymm4 = aa0InvSqrt x2 0 0 = y0[xi+0+4]
-    vmulpd         %xmm1, %xmm2,    %xmm2 # ymm2 = acc1_re*y_re  acc1_im*y_re 0 0
-    vsubpd         %xmm2, %xmm0,    %xmm0 # ymm0 = acc0_re -= acc1_re*y_re acc0_im -= acc1_im*y_re
+    vfnmadd231pd   %xmm1, %xmm2,    %xmm0 # ymm0 = acc0_re -= acc1_re*y_re acc0_im -= acc1_im*y_re
     vpermilpd $1,  %xmm1,           %xmm2 # ymm2 = acc1_im  acc1_re  0 0
     vmulpd         %xmm3, %xmm2,    %xmm2 # ymm2 = acc1_im*y_im  acc1_re*y0_im 0 0
     vaddsubpd      %xmm2, %xmm0,    %xmm0 # ymm0 = acc0_re -= acc1_im*y_im acc0_im -= acc1_re*y_im
@@ -205,20 +196,16 @@ chol_SolveBwd_a:
     shr       $5,              %edx    # edx  = cnt = rlen/4
     .last_cloop:
       # acc1 -= x[c] * conj(y1[c]);
-      vmovupd   (%rbx, %r9),   %ymm0   # ymm0  = y1_re = y1[c+0:3]
-      vmovupd   (%rbx),        %ymm4   # ymm4  = x_re  = x[c+0:3]
-      vmovupd 32(%rbx),        %ymm5   # ymm5  = x_im  = x[c+4:7]
+      vmovupd   (%rbx, %r9),     %ymm0 # ymm0  = y1_re = y1[c+0:3]
+      vmovupd   (%rbx),          %ymm4 # ymm4  = x_re  = x[c+0:3]
+      vmovupd 32(%rbx),          %ymm5 # ymm5  = x_im  = x[c+4:7]
 
-      vmulpd     %ymm4, %ymm0, %ymm1   # ymm1  = x_re*y1_re
-      vsubpd     %ymm1, %ymm2, %ymm2   # ymm2  = acc1_rere -= x_re*y1_re
-      vmulpd     %ymm5, %ymm0, %ymm1   # ymm1  = x_im*y1_re
-      vsubpd     %ymm1, %ymm3, %ymm3   # ymm3  = acc1_imre -= x_im*y1_re
+      vfnmadd231pd %ymm4, %ymm0, %ymm2 # ymm2  = acc1_rere -= x_re*y1_re
+      vfnmadd231pd %ymm5, %ymm0, %ymm3 # ymm3  = acc1_imre -= x_im*y1_re
 
-      vmovupd 32(%rbx, %r9),   %ymm0   # ymm0  = y1_im = y1[c+4:7]
-      vmulpd     %ymm4, %ymm0, %ymm1   # ymm1  = x_re*y1_im
-      vaddpd     %ymm1, %ymm6, %ymm6   # ymm6  = acc1_reim += x_re*y1_im
-      vmulpd     %ymm5, %ymm0, %ymm1   # ymm1  = x_im*y1_im
-      vaddpd     %ymm1, %ymm7, %ymm7   # ymm7  = acc1_imim += x_im*y1_im
+      vmovupd 32(%rbx, %r9),     %ymm0 # ymm0  = y1_im = y1[c+4:7]
+      vfmadd231pd  %ymm4, %ymm0, %ymm6 # ymm6  = acc1_reim += x_re*y1_im
+      vfmadd231pd  %ymm5, %ymm0, %ymm7 # ymm7  = acc1_imim += x_im*y1_im
 
       add      $64,   %rbx             # rbx  = &x[c] += 8
     dec               %edx             # edx  = cnt -= 1
