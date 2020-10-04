@@ -5,7 +5,7 @@
 	.endef
 	.globl	@feat.00
 .set @feat.00, 0
-	.file	"chol_SolveFwd_a2.s"
+	.file	"chol_SolveFwd_a1.s"
 	.def	 chol_SolveFwd_a;
 	.scl	2;
 	.type	32;

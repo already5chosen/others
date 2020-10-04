@@ -15,10 +15,8 @@
 # extern "C" void chol_SolveFwd(double *x, unsigned N, const double* triang)
 chol_SolveFwd_a:
   .seh_proc chol_SolveFwd_a
-	subq	$40, %rsp
-	.seh_stackalloc 40
-	vmovapd	%xmm7, 16(%rsp)         # 16-byte Spill
-	.seh_savexmm %xmm7, 16
+	subq	$24, %rsp
+	.seh_stackalloc 24
 	vmovapd	%xmm6, 0(%rsp)          # 16-byte Spill
 	.seh_savexmm %xmm6, 0
 	.seh_endprologue
@@ -54,10 +52,8 @@ chol_SolveFwd_a:
     sub %rcx,  %r8                       # r8   = (triang-x)*sizeof(double)
     mov %edx,  %r10d                     # r10  = rlenx
 
-    vmovddup   %xmm0,              %xmm0 # ymm0 =  x0_re   x2
-    vmovddup   %xmm1,              %xmm1 # ymm1 =  x0_re   x2
-    vperm2f128 $0,%ymm0,%ymm0,     %ymm0 # ymm0 =  x0_re   x4
-    vperm2f128 $0,%ymm1,%ymm1,     %ymm1 # ymm1 =  x0_im   x4
+    vbroadcastsd %xmm0,            %ymm0 # ymm0 =  x0_re   x4
+    vbroadcastsd %xmm1,            %ymm1 # ymm1 =  x0_im   x4
 
     lea        (%rcx, %rax,4),     %rcx  # rcx = &x[c] = &x[xi*4]
     .odd_loop:
@@ -66,15 +62,11 @@ chol_SolveFwd_a:
       vmovupd 32(%rcx),            %ymm3 # ymm3 = x_im = x[c+4]
       vmovupd 32(%rcx,%r8),        %ymm5 # ymm5 = y_im = y[c+4]
 
-      vmulpd     %ymm4, %ymm0,     %ymm6 # ymm6 = y_re*x0_re
-      vsubpd     %ymm6, %ymm2,     %ymm2 # ymm2 = x_re -= y_re*x0_re
-      vmulpd     %ymm4, %ymm1,     %ymm6 # ymm6 = y_re*x0_im
-      vsubpd     %ymm6, %ymm3,     %ymm3 # ymm2 = x_im -= y_re*x0_im
+      vfnmadd231pd %ymm4, %ymm0,   %ymm2 # ymm2 = x_re -= y_re*x0_re
+      vfnmadd231pd %ymm4, %ymm1,   %ymm3 # ymm2 = x_im -= y_re*x0_im
 
-      vmulpd     %ymm5, %ymm1,     %ymm6 # ymm6 = y_im*x0_im
-      vaddpd     %ymm6, %ymm2,     %ymm2 # ymm2 = x_re += y_im*x0_im
-      vmulpd     %ymm5, %ymm0,     %ymm6 # ymm6 = y_im*x0_re
-      vsubpd     %ymm6, %ymm3,     %ymm3 # ymm2 = x_im -= y_im*x0_re
+      vfmadd231pd  %ymm5, %ymm1,   %ymm2 # ymm2 = x_re += y_im*x0_im
+      vfnmadd231pd %ymm5, %ymm0,   %ymm3 # ymm2 = x_im -= y_im*x0_re
 
       vmovupd    %ymm2,   (%rcx)         # x[c+0] = x_re
       vmovupd    %ymm3, 32(%rcx)         # x[c+4] = x_im
@@ -109,28 +101,20 @@ chol_SolveFwd_a:
       vmovupd   (%rcx),            %ymm4 # ymm4 = x_re  = x[c+0]
       vmovupd 32(%rcx),            %ymm5 # ymm5 = x_im  = x[c+4]
 
-      vmulpd     %ymm6, %ymm0,     %ymm7 # ymm7 = y0_re*x0_re
-      vsubpd     %ymm7, %ymm4,     %ymm4 # ymm4 = x_re -= y0_re*x0_re
-      vmulpd     %ymm6, %ymm1,     %ymm7 # ymm7 = y0_re*x0_im
-      vsubpd     %ymm7, %ymm5,     %ymm5 # ymm5 = x_im -= y0_re*x0_im
+      vfnmadd231pd %ymm6, %ymm0,   %ymm4 # ymm4 = x_re -= y0_re*x0_re
+      vfnmadd231pd %ymm6, %ymm1,   %ymm5 # ymm5 = x_im -= y0_re*x0_im
 
       vmovupd 32(%rcx,%r8),        %ymm6 # ymm5 = y0_im = y[c+4]
-      vmulpd     %ymm6, %ymm1,     %ymm7 # ymm7 = y0_im*x0_im
-      vaddpd     %ymm7, %ymm4,     %ymm4 # ymm4 = x_re += y0_im*x0_im
-      vmulpd     %ymm6, %ymm0,     %ymm7 # ymm7 = y0_im*x0_re
-      vsubpd     %ymm7, %ymm5,     %ymm5 # ymm5 = x_im -= y0_im*x0_re
+      vfmadd231pd  %ymm6, %ymm1,   %ymm4 # ymm4 = x_re += y0_im*x0_im
+      vfnmadd231pd %ymm6, %ymm0,   %ymm5 # ymm5 = x_im -= y0_im*x0_re
 
       vmovupd   (%rcx,%r9),        %ymm6 # ymm6 = y1_re = y1[c+0]
-      vmulpd     %ymm6, %ymm2,     %ymm7 # ymm7 = y1_re*x1_re
-      vsubpd     %ymm7, %ymm4,     %ymm4 # ymm4 = x_re -= y1_re*x1_re
-      vmulpd     %ymm6, %ymm3,     %ymm7 # ymm7 = y1_re*x1_im
-      vsubpd     %ymm7, %ymm5,     %ymm5 # ymm5 = x_im -= y1_re*x1_im
+      vfnmadd231pd %ymm6, %ymm2,   %ymm4 # ymm4 = x_re -= y1_re*x1_re
+      vfnmadd231pd %ymm6, %ymm3,   %ymm5 # ymm5 = x_im -= y1_re*x1_im
 
       vmovupd 32(%rcx,%r9),        %ymm6 # ymm5 = y1_im = y1[c+4]
-      vmulpd     %ymm6, %ymm3,     %ymm7 # ymm7 = y1_im*x1_im
-      vaddpd     %ymm7, %ymm4,     %ymm4 # ymm4 = x_re += y1_im*x1_im
-      vmulpd     %ymm6, %ymm2,     %ymm7 # ymm7 = y1_im*x1_re
-      vsubpd     %ymm7, %ymm5,     %ymm5 # ymm5 = x_im -= y1_im*x1_re
+      vfmadd231pd  %ymm6, %ymm3,   %ymm4 # ymm4 = x_re += y1_im*x1_im
+      vfnmadd231pd %ymm6, %ymm2,   %ymm5 # ymm5 = x_im -= y1_im*x1_re
 
       vmovupd    %ymm4,   (%rcx)         # x[c+0] = x_re
       vmovupd    %ymm5, 32(%rcx)         # x[c+0] = x_im
@@ -190,9 +174,8 @@ chol_SolveFwd_a:
   vmovupd      %xmm1, 32(%rcx)           # x[xi+4:5] = [x0_im x1_im]
 
   .done:
-  vmovaps	16(%rsp), %xmm7
   vmovaps	 0(%rsp), %xmm6
-  add     $40, %rsp
+  add     $24, %rsp
   vzeroupper
   retq
 .seh_handlerdata
