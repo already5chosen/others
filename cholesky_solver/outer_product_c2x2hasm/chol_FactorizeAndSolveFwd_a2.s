@@ -5,7 +5,7 @@
   .endef
   .globl  @feat.00
 .set @feat.00, 0
-  .file "chol_FactorizeAndSolveFwd_a.s"
+  .file "chol_FactorizeAndSolveFwd_a2.s"
   .def   chol_FactorizeAndSolveFwd_a;
   .scl  2;
   .type 32;
