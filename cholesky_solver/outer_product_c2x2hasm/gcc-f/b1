@@ -1,0 +1,11 @@
+archflags="-mavx -march=ivybridge -mtune=skylake"
+copt="-Wall -std=c++11 -Ofast -I../.. $archflags"
+CC=g++
+AS=clang
+$CC -c ../../main.cpp $copt -o main.1.o
+$CC -c ../chol.cpp    $copt -o chol.1.o
+$AS -c ../chol_FactorizeAndSolveFwd_a1.s -Wall
+$AS -c ../chol_Factorize_a1.s -Wall
+$AS -c ../chol_SolveFwd_a1.s -Wall
+$AS -c ../chol_SolveBwd_a1.s -Wall
+$CC -s -o s_chol.1.exe main.1.o chol.1.o chol_FactorizeAndSolveFwd_a1.o chol_Factorize_a1.o chol_SolveFwd_a1.o chol_SolveBwd_a1.o
