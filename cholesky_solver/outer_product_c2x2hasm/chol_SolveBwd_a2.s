@@ -168,7 +168,8 @@ chol_SolveBwd_a:
   cmp              %r11d,           %edx
   jbe .rloop                              # rlenx <= Nx
 
-  je  .done
+  test $8, %r11d
+  jz  .done
     # N % 2 == 1
     # handle the first row of matrix with odd number of elements
     # RAX  = xix
