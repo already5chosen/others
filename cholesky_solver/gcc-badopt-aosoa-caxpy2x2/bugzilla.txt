@@ -588,3 +588,10 @@ Being twice slower than clang is not a small fit.
 
 I knew about this bug several weeks ago, but somehow didn't realize that 11.0 is so near, so was lazy to report at time.
 Now I am sorry.
+
+Sources and compilation scripts for bigger real-world testbench here:
+https://github.com/already5chosen/others/tree/master/cholesky_solver/gcc-badopt-aosoa-caxpy2x2
+
+Reported here:
+https://gcc.gnu.org/bugzilla/show_bug.cgi?id=97832
+
