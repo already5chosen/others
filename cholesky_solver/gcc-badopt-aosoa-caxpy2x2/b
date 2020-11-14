@@ -1,0 +1,13 @@
+archflags="-mavx2 -mfma -march=skylake"
+copt="-Wall -std=c++11 $archflags"
+CC=g++
+cc=gcc
+$CC -c main.cpp $copt -O2 -o main.o &
+$CC -c chol.cpp $copt -O3 -o chol.o &
+$cc -c chol_FactorizeMainLoop.c $archflags -Wall -O3    -o chol_FactorizeMainLoop.o3.o &
+$cc -c chol_FactorizeMainLoop.c $archflags -Wall -O2    -o chol_FactorizeMainLoop.o2.o &
+$cc -c chol_FactorizeMainLoop.c $archflags -Wall -Ofast -o chol_FactorizeMainLoop.of.o &
+wait
+$CC -s -o s_chol.o2.exe main.o chol.o chol_FactorizeMainLoop.o2.o
+$CC -s -o s_chol.o3.exe main.o chol.o chol_FactorizeMainLoop.o3.o
+$CC -s -o s_chol.of.exe main.o chol.o chol_FactorizeMainLoop.of.o

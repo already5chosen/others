@@ -1,0 +1,590 @@
+AoSoA complex caxpy-like loops: AVX2+FMA -Ofast 7 times slower than -O3
+
+void foo(double* restrict y, const double* restrict x0, const double* restrict x1, int clen)
+{
+  int xi = clen & 2;
+  double f00_re = x0[0+xi+0];
+  double f10_re = x1[0+xi+0];
+  double f01_re = x0[0+xi+1];
+  double f11_re = x1[0+xi+1];
+  double f00_im = x0[4+xi+0];
+  double f10_im = x1[4+xi+0];
+  double f01_im = x0[4+xi+1];
+  double f11_im = x1[4+xi+1];
+  int clen2 = (clen+xi) * 2;
+  double* y0 = &y[0];
+  double* y1 = &y[clen2];
+  #pragma GCC unroll 0
+  for (int c = 0; c < clen2; c += 8) {
+    // y0[c] = y0[c] - x0[c]*conj(f00) - x1[c]*conj(f10);
+    // y1[c] = y1[c] - x0[c]*conj(f01) - x1[c]*conj(f11);
+    #pragma GCC unroll 4
+    for (int k = 0; k < 4; ++k) {
+      double x0_re = x0[c+0+k];
+      double x0_im = x0[c+4+k];
+      double y0_re = y0[c+0+k];
+      double y0_im = y0[c+4+k];
+      double y1_re = y1[c+0+k];
+      double y1_im = y1[c+4+k];
+      y0_re = y0_re - x0_re * f00_re - x0_im * f00_im;
+      y0_im = y0_im + x0_re * f00_im - x0_im * f00_re;
+      y1_re = y1_re - x0_re * f01_re - x0_im * f01_im;
+      y1_im = y1_im + x0_re * f01_im - x0_im * f01_re;
+      double x1_re = x1[c+0+k];
+      double x1_im = x1[c+4+k];
+      y0_re = y0_re - x1_re * f10_re - x1_im * f10_im;
+      y0_im = y0_im + x1_re * f10_im - x1_im * f10_re;
+      y1_re = y1_re - x1_re * f11_re - x1_im * f11_im;
+      y1_im = y1_im + x1_re * f11_im - x1_im * f11_re;
+      y0[c+0+k] = y0_re;
+      y0[c+4+k] = y0_im;
+      y1[c+0+k] = y1_re;
+      y1[c+4+k] = y1_im;
+    }
+  }
+}
+
+When compiled with 'gcc.10.2. -march=skylake -O3' it produces pretty decent code. The only problem is over-aggressive load+op combining
+similar to what we already discussed in 97127. It seems, this problem can't be solved without major overhaul of gcc optimizer architecture,
+but luckily an impact is quite minor.
+But when we compile with 'gcc.10.2. -march=skylake -Ofast' the fun begins:
+
+.L5:
+	vmovupd	(%r9), %ymm7
+	vmovupd	64(%r9), %ymm6
+	vunpcklpd	32(%r9), %ymm7, %ymm2
+	vunpckhpd	32(%r9), %ymm7, %ymm0
+	vmovupd	64(%r9), %ymm7
+	vmovupd	192(%r9), %ymm4
+	vunpckhpd	96(%r9), %ymm7, %ymm5
+	vmovupd	128(%r9), %ymm7
+	vunpcklpd	96(%r9), %ymm6, %ymm6
+	vunpcklpd	160(%r9), %ymm7, %ymm3
+	vunpckhpd	160(%r9), %ymm7, %ymm1
+	vmovupd	192(%r9), %ymm7
+	vunpcklpd	224(%r9), %ymm4, %ymm4
+	vunpckhpd	224(%r9), %ymm7, %ymm8
+	vpermpd	$216, %ymm6, %ymm6
+	vpermpd	$216, %ymm5, %ymm5
+	vpermpd	$216, %ymm4, %ymm4
+	vpermpd	$216, %ymm8, %ymm8
+	vpermpd	$216, %ymm2, %ymm2
+	vpermpd	$216, %ymm0, %ymm0
+	vpermpd	$216, %ymm3, %ymm3
+	vpermpd	$216, %ymm1, %ymm1
+	vunpcklpd	%ymm6, %ymm2, %ymm7
+	vunpckhpd	%ymm6, %ymm2, %ymm2
+	vunpcklpd	%ymm4, %ymm3, %ymm6
+	vunpckhpd	%ymm4, %ymm3, %ymm3
+	vunpcklpd	%ymm5, %ymm0, %ymm4
+	vunpckhpd	%ymm5, %ymm0, %ymm0
+	vunpcklpd	%ymm8, %ymm1, %ymm5
+	vpermpd	$216, %ymm5, %ymm5
+	vpermpd	$216, %ymm4, %ymm4
+	vpermpd	$216, %ymm3, %ymm3
+	vunpcklpd	%ymm5, %ymm4, %ymm11
+	vpermpd	$216, %ymm2, %ymm2
+	vunpckhpd	%ymm5, %ymm4, %ymm4
+	vunpckhpd	%ymm8, %ymm1, %ymm1
+	vpermpd	$216, %ymm0, %ymm0
+	vpermpd	$216, %ymm4, %ymm8
+	vpermpd	$216, %ymm1, %ymm1
+	vunpcklpd	%ymm3, %ymm2, %ymm4
+	vunpckhpd	%ymm3, %ymm2, %ymm2
+	vpermpd	$216, %ymm2, %ymm5
+	vunpcklpd	%ymm1, %ymm0, %ymm2
+	vpermpd	$216, %ymm4, %ymm10
+	vpermpd	$216, %ymm2, %ymm4
+	vmovupd	64(%rax), %ymm2
+	vmovupd	(%rax), %ymm3
+	vmovupd	%ymm4, 448(%rsp)
+	vunpckhpd	96(%rax), %ymm2, %ymm4
+	vmovupd	128(%rax), %ymm2
+	vpermpd	$216, %ymm6, %ymm6
+	vunpckhpd	%ymm1, %ymm0, %ymm1
+	vpermpd	$216, %ymm7, %ymm7
+	vunpcklpd	32(%rax), %ymm3, %ymm9
+	vunpckhpd	32(%rax), %ymm3, %ymm14
+	vunpckhpd	160(%rax), %ymm2, %ymm0
+	vmovupd	64(%rax), %ymm3
+	vunpcklpd	%ymm6, %ymm7, %ymm12
+	vunpckhpd	%ymm6, %ymm7, %ymm7
+	vpermpd	$216, %ymm1, %ymm6
+	vunpcklpd	160(%rax), %ymm2, %ymm1
+	vmovupd	192(%rax), %ymm2
+	vunpcklpd	96(%rax), %ymm3, %ymm3
+	vmovupd	%ymm5, 416(%rsp)
+	vunpcklpd	224(%rax), %ymm2, %ymm5
+	vunpckhpd	224(%rax), %ymm2, %ymm2
+	vpermpd	$216, %ymm3, %ymm3
+	vpermpd	$216, %ymm5, %ymm5
+	vpermpd	$216, %ymm9, %ymm9
+	vpermpd	$216, %ymm1, %ymm1
+	vpermpd	$216, %ymm4, %ymm4
+	vpermpd	$216, %ymm0, %ymm0
+	vmovupd	%ymm10, 384(%rsp)
+	vpermpd	$216, %ymm14, %ymm14
+	vunpcklpd	%ymm3, %ymm9, %ymm10
+	vpermpd	$216, %ymm2, %ymm2
+	vunpckhpd	%ymm3, %ymm9, %ymm9
+	vunpcklpd	%ymm5, %ymm1, %ymm3
+	vpermpd	$216, %ymm3, %ymm3
+	vmovupd	%ymm8, 288(%rsp)
+	vpermpd	$216, %ymm10, %ymm10
+	vunpcklpd	%ymm4, %ymm14, %ymm8
+	vunpckhpd	%ymm4, %ymm14, %ymm14
+	vunpcklpd	%ymm2, %ymm0, %ymm4
+	vpermpd	$216, %ymm4, %ymm4
+	vpermpd	$216, %ymm8, %ymm8
+	vunpckhpd	%ymm2, %ymm0, %ymm2
+	vunpcklpd	%ymm3, %ymm10, %ymm0
+	vpermpd	$216, %ymm0, %ymm13
+	vunpcklpd	%ymm4, %ymm8, %ymm0
+	vunpckhpd	%ymm4, %ymm8, %ymm8
+	vpermpd	$216, %ymm2, %ymm2
+	vunpckhpd	%ymm3, %ymm10, %ymm10
+	vpermpd	$216, %ymm14, %ymm14
+	vpermpd	$216, %ymm0, %ymm3
+	vpermpd	$216, %ymm8, %ymm0
+	vmovupd	%ymm6, 480(%rsp)
+	vunpckhpd	%ymm5, %ymm1, %ymm1
+	vmovupd	%ymm3, 512(%rsp)
+	vmovupd	(%rsi), %ymm3
+	vmovupd	%ymm0, 544(%rsp)
+	vunpcklpd	%ymm2, %ymm14, %ymm0
+	vpermpd	$216, %ymm1, %ymm1
+	vpermpd	$216, %ymm0, %ymm4
+	vpermpd	$216, %ymm9, %ymm9
+	vunpcklpd	%ymm1, %ymm9, %ymm6
+	vmovupd	%ymm4, 640(%rsp)
+	vunpckhpd	%ymm1, %ymm9, %ymm9
+	vunpcklpd	32(%rsi), %ymm3, %ymm4
+	vunpckhpd	32(%rsi), %ymm3, %ymm1
+	vmovupd	64(%rsi), %ymm3
+	vunpckhpd	%ymm2, %ymm14, %ymm14
+	vunpcklpd	96(%rsi), %ymm3, %ymm8
+	vunpckhpd	96(%rsi), %ymm3, %ymm5
+	vmovupd	128(%rsi), %ymm3
+	vpermpd	$216, %ymm14, %ymm2
+	vunpckhpd	160(%rsi), %ymm3, %ymm0
+	vmovupd	%ymm2, 672(%rsp)
+	vunpcklpd	160(%rsi), %ymm3, %ymm2
+	vmovupd	192(%rsi), %ymm3
+	vmovupd	192(%rsi), %ymm14
+	vunpcklpd	224(%rsi), %ymm3, %ymm3
+	vpermpd	$216, %ymm9, %ymm9
+	vmovupd	%ymm9, 608(%rsp)
+	vunpckhpd	224(%rsi), %ymm14, %ymm9
+	vpermpd	$216, %ymm8, %ymm8
+	vpermpd	$216, %ymm3, %ymm3
+	vpermpd	$216, %ymm6, %ymm6
+	vpermpd	$216, %ymm4, %ymm4
+	vpermpd	$216, %ymm2, %ymm2
+	vpermpd	$216, %ymm5, %ymm5
+	vpermpd	$216, %ymm9, %ymm9
+	vmovupd	%ymm6, 576(%rsp)
+	vpermpd	$216, %ymm1, %ymm1
+	vunpcklpd	%ymm8, %ymm4, %ymm6
+	vpermpd	$216, %ymm0, %ymm0
+	vunpckhpd	%ymm8, %ymm4, %ymm4
+	vunpcklpd	%ymm3, %ymm2, %ymm8
+	vpermpd	$216, %ymm8, %ymm8
+	vpermpd	$216, %ymm6, %ymm6
+	vunpckhpd	%ymm3, %ymm2, %ymm2
+	vunpcklpd	%ymm5, %ymm1, %ymm3
+	vunpckhpd	%ymm5, %ymm1, %ymm1
+	vunpcklpd	%ymm9, %ymm0, %ymm5
+	vpermpd	$216, %ymm2, %ymm2
+	vpermpd	$216, %ymm5, %ymm5
+	vunpcklpd	%ymm8, %ymm6, %ymm14
+	vpermpd	$216, %ymm4, %ymm4
+	vunpckhpd	%ymm8, %ymm6, %ymm6
+	vpermpd	$216, %ymm3, %ymm3
+	vunpckhpd	%ymm9, %ymm0, %ymm0
+	vpermpd	$216, %ymm6, %ymm9
+	vunpcklpd	%ymm5, %ymm3, %ymm6
+	vunpckhpd	%ymm5, %ymm3, %ymm3
+	vunpcklpd	%ymm2, %ymm4, %ymm5
+	vunpckhpd	%ymm2, %ymm4, %ymm4
+	vpermpd	$216, %ymm0, %ymm0
+	vpermpd	$216, %ymm4, %ymm2
+	vpermpd	$216, %ymm1, %ymm1
+	vmovupd	%ymm2, 832(%rsp)
+	vunpcklpd	%ymm0, %ymm1, %ymm2
+	vunpckhpd	%ymm0, %ymm1, %ymm1
+	vpermpd	$216, %ymm1, %ymm0
+	vmovupd	%ymm0, 896(%rsp)
+	vmovupd	(%rbx), %ymm0
+	vpermpd	$216, %ymm2, %ymm4
+	vunpckhpd	32(%rbx), %ymm0, %ymm1
+	vunpcklpd	32(%rbx), %ymm0, %ymm2
+	vmovupd	64(%rbx), %ymm0
+	vpermpd	$216, %ymm5, %ymm5
+	vmovupd	%ymm5, 800(%rsp)
+	vmovupd	%ymm4, 864(%rsp)
+	vunpcklpd	96(%rbx), %ymm0, %ymm5
+	vunpckhpd	96(%rbx), %ymm0, %ymm4
+	vmovupd	128(%rbx), %ymm0
+	vpermpd	$216, %ymm6, %ymm6
+	vpermpd	$216, %ymm3, %ymm3
+	vmovupd	%ymm9, 704(%rsp)
+	vmovupd	%ymm6, 736(%rsp)
+	vmovupd	%ymm3, 768(%rsp)
+	vunpcklpd	160(%rbx), %ymm0, %ymm3
+	vmovupd	192(%rbx), %ymm8
+	vunpckhpd	160(%rbx), %ymm0, %ymm0
+	vunpcklpd	224(%rbx), %ymm8, %ymm6
+	vunpckhpd	224(%rbx), %ymm8, %ymm9
+	vpermpd	$216, %ymm5, %ymm5
+	vpermpd	$216, %ymm4, %ymm4
+	vpermpd	$216, %ymm6, %ymm6
+	vpermpd	$216, %ymm9, %ymm9
+	vpermpd	$216, %ymm2, %ymm2
+	vpermpd	$216, %ymm1, %ymm1
+	vpermpd	$216, %ymm3, %ymm3
+	vpermpd	$216, %ymm0, %ymm0
+	vunpcklpd	%ymm5, %ymm2, %ymm8
+	vunpckhpd	%ymm5, %ymm2, %ymm2
+	vunpcklpd	%ymm6, %ymm3, %ymm5
+	vunpckhpd	%ymm6, %ymm3, %ymm3
+	vunpcklpd	%ymm4, %ymm1, %ymm6
+	vunpckhpd	%ymm4, %ymm1, %ymm1
+	vunpcklpd	%ymm9, %ymm0, %ymm4
+	vunpckhpd	%ymm9, %ymm0, %ymm0
+	vpermpd	$216, %ymm5, %ymm5
+	vpermpd	$216, %ymm3, %ymm3
+	vpermpd	$216, %ymm4, %ymm4
+	vpermpd	$216, %ymm0, %ymm0
+	vpermpd	$216, %ymm8, %ymm8
+	vpermpd	$216, %ymm2, %ymm2
+	vpermpd	$216, %ymm6, %ymm6
+	vpermpd	$216, %ymm1, %ymm1
+	vunpcklpd	%ymm5, %ymm8, %ymm9
+	vunpckhpd	%ymm5, %ymm8, %ymm8
+	vunpcklpd	%ymm4, %ymm6, %ymm5
+	vunpckhpd	%ymm4, %ymm6, %ymm6
+	vunpcklpd	%ymm3, %ymm2, %ymm4
+	vunpckhpd	%ymm3, %ymm2, %ymm2
+	vunpcklpd	%ymm0, %ymm1, %ymm3
+	vunpckhpd	%ymm0, %ymm1, %ymm1
+	vpermpd	$216, %ymm9, %ymm9
+	vpermpd	$216, %ymm8, %ymm8
+	vpermpd	$216, %ymm1, %ymm0
+	vpermpd	$216, %ymm10, %ymm15
+	vmovupd	%ymm0, 240(%rsp)
+	vmulpd	320(%rsp), %ymm9, %ymm10
+	vmulpd	64(%rsp), %ymm8, %ymm0
+	vmovupd	(%rsp), %ymm1
+	vpermpd	$216, %ymm12, %ymm12
+	vpermpd	$216, %ymm7, %ymm7
+	vfmadd231pd	176(%rsp), %ymm12, %ymm10
+	vfmadd231pd	%ymm1, %ymm7, %ymm0
+	vpermpd	$216, %ymm14, %ymm14
+	vpermpd	$216, %ymm11, %ymm11
+	vpermpd	$216, %ymm6, %ymm6
+	vpermpd	$216, %ymm5, %ymm5
+	vaddpd	%ymm10, %ymm0, %ymm0
+	vmulpd	64(%rsp), %ymm9, %ymm10
+	vpermpd	$216, %ymm2, %ymm2
+	vsubpd	%ymm0, %ymm13, %ymm0
+	vmulpd	320(%rsp), %ymm8, %ymm13
+	vpermpd	$216, %ymm4, %ymm4
+	vfmadd231pd	%ymm1, %ymm12, %ymm10
+	vmovupd	%ymm0, 352(%rsp)
+	vmovupd	208(%rsp), %ymm0
+	vfmadd231pd	176(%rsp), %ymm7, %ymm13
+	vpermpd	$216, %ymm3, %ymm3
+	addq	$256, %r9
+	addq	$256, %rax
+	addq	$256, %rsi
+	vsubpd	%ymm13, %ymm10, %ymm10
+	vmulpd	%ymm0, %ymm9, %ymm13
+	vmulpd	96(%rsp), %ymm9, %ymm9
+	vaddpd	%ymm15, %ymm10, %ymm10
+	vmulpd	96(%rsp), %ymm8, %ymm15
+	vmulpd	%ymm0, %ymm8, %ymm8
+	vmovupd	%ymm10, 928(%rsp)
+	vmovupd	128(%rsp), %ymm10
+	vfmadd231pd	32(%rsp), %ymm12, %ymm13
+	vfmadd231pd	%ymm10, %ymm12, %ymm9
+	vmovupd	32(%rsp), %ymm12
+	vfmadd231pd	%ymm10, %ymm7, %ymm15
+	vfmadd231pd	%ymm12, %ymm7, %ymm8
+	vmovupd	(%rsp), %ymm7
+	addq	$256, %rbx
+	addq	$256, %r11
+	vaddpd	%ymm15, %ymm13, %ymm13
+	vsubpd	%ymm8, %ymm9, %ymm9
+	vmovapd	%ymm10, %ymm15
+	vmovupd	288(%rsp), %ymm10
+	vsubpd	%ymm13, %ymm14, %ymm1
+	vaddpd	704(%rsp), %ymm9, %ymm13
+	vmulpd	%ymm15, %ymm10, %ymm9
+	vmulpd	%ymm10, %ymm7, %ymm7
+	vmovupd	176(%rsp), %ymm14
+	vmovupd	320(%rsp), %ymm15
+	vmovupd	%ymm1, 960(%rsp)
+	vfmadd231pd	%ymm12, %ymm11, %ymm9
+	vmovupd	64(%rsp), %ymm12
+	vfmadd231pd	%ymm14, %ymm11, %ymm7
+	vmulpd	%ymm12, %ymm6, %ymm8
+	vmovupd	512(%rsp), %ymm1
+	vfmadd231pd	%ymm15, %ymm5, %ymm8
+	vaddpd	%ymm8, %ymm7, %ymm7
+	vmulpd	%ymm12, %ymm5, %ymm8
+	vmulpd	%ymm15, %ymm6, %ymm12
+	vsubpd	%ymm7, %ymm1, %ymm7
+	vfmadd231pd	(%rsp), %ymm11, %ymm8
+	vfmadd231pd	%ymm14, %ymm10, %ymm12
+	vsubpd	%ymm12, %ymm8, %ymm8
+	vmulpd	96(%rsp), %ymm6, %ymm12
+	vmulpd	%ymm0, %ymm6, %ymm6
+	vaddpd	544(%rsp), %ymm8, %ymm8
+	vmovupd	736(%rsp), %ymm1
+	vmovupd	288(%rsp), %ymm10
+	vfmadd231pd	%ymm0, %ymm5, %ymm12
+	vmulpd	96(%rsp), %ymm5, %ymm5
+	vmovupd	416(%rsp), %ymm0
+	vaddpd	%ymm12, %ymm9, %ymm9
+	vmovupd	32(%rsp), %ymm12
+	vsubpd	%ymm9, %ymm1, %ymm9
+	vmovupd	128(%rsp), %ymm1
+	vfmadd231pd	%ymm12, %ymm10, %ymm6
+	vfmadd231pd	%ymm1, %ymm11, %ymm5
+	vmovupd	384(%rsp), %ymm10
+	vmovupd	%ymm9, 512(%rsp)
+	vsubpd	%ymm6, %ymm5, %ymm11
+	vmulpd	%ymm1, %ymm0, %ymm5
+	vmovupd	(%rsp), %ymm6
+	vmovupd	576(%rsp), %ymm1
+	vmulpd	%ymm0, %ymm6, %ymm9
+	vaddpd	768(%rsp), %ymm11, %ymm11
+	vfmadd231pd	%ymm12, %ymm10, %ymm5
+	vmovupd	64(%rsp), %ymm12
+	vmulpd	%ymm12, %ymm2, %ymm6
+	vfmadd231pd	%ymm10, %ymm14, %ymm9
+	vfmadd231pd	%ymm15, %ymm4, %ymm6
+	vaddpd	%ymm9, %ymm6, %ymm6
+	vmulpd	%ymm12, %ymm4, %ymm9
+	vmulpd	%ymm15, %ymm2, %ymm12
+	vsubpd	%ymm6, %ymm1, %ymm6
+	vmovupd	800(%rsp), %ymm1
+	vfmadd231pd	(%rsp), %ymm10, %ymm9
+	vfmadd231pd	%ymm14, %ymm0, %ymm12
+	vsubpd	%ymm12, %ymm9, %ymm9
+	vmulpd	96(%rsp), %ymm2, %ymm12
+	vmulpd	208(%rsp), %ymm2, %ymm2
+	vaddpd	608(%rsp), %ymm9, %ymm9
+	vfmadd231pd	208(%rsp), %ymm4, %ymm12
+	vmulpd	96(%rsp), %ymm4, %ymm4
+	vaddpd	%ymm12, %ymm5, %ymm5
+	vfmadd231pd	128(%rsp), %ymm10, %ymm4
+	vmovupd	480(%rsp), %ymm10
+	vsubpd	%ymm5, %ymm1, %ymm5
+	vmovapd	%ymm0, %ymm1
+	vmovupd	32(%rsp), %ymm0
+	vfmadd231pd	%ymm0, %ymm1, %ymm2
+	vmovupd	448(%rsp), %ymm1
+	vsubpd	%ymm2, %ymm4, %ymm4
+	vmovupd	(%rsp), %ymm2
+	vmulpd	%ymm10, %ymm2, %ymm12
+	vmulpd	128(%rsp), %ymm10, %ymm2
+	vaddpd	832(%rsp), %ymm4, %ymm4
+	vfmadd231pd	%ymm1, %ymm14, %ymm12
+	vfmadd231pd	%ymm0, %ymm1, %ymm2
+	vmovupd	240(%rsp), %ymm0
+	vmulpd	64(%rsp), %ymm0, %ymm14
+	vfmadd231pd	%ymm15, %ymm3, %ymm14
+	vmulpd	%ymm0, %ymm15, %ymm15
+	vaddpd	%ymm14, %ymm12, %ymm12
+	vmovupd	640(%rsp), %ymm14
+	vfmadd231pd	176(%rsp), %ymm10, %ymm15
+	vsubpd	%ymm12, %ymm14, %ymm12
+	vmulpd	64(%rsp), %ymm3, %ymm14
+	vfmadd231pd	(%rsp), %ymm1, %ymm14
+	vsubpd	%ymm15, %ymm14, %ymm14
+	vaddpd	672(%rsp), %ymm14, %ymm14
+	vmulpd	96(%rsp), %ymm0, %ymm15
+	vmovupd	208(%rsp), %ymm0
+	vfmadd231pd	%ymm0, %ymm3, %ymm15
+	vmulpd	96(%rsp), %ymm3, %ymm3
+	vaddpd	%ymm15, %ymm2, %ymm2
+	vmovupd	864(%rsp), %ymm15
+	vfmadd231pd	128(%rsp), %ymm1, %ymm3
+	vsubpd	%ymm2, %ymm15, %ymm2
+	vmovupd	240(%rsp), %ymm15
+	vmulpd	%ymm0, %ymm15, %ymm1
+	vpermpd	$68, 352(%rsp), %ymm15
+	vpermpd	$238, 352(%rsp), %ymm0
+	vfmadd231pd	32(%rsp), %ymm10, %ymm1
+	vmovupd	928(%rsp), %ymm10
+	vsubpd	%ymm1, %ymm3, %ymm1
+	vpermpd	$68, %ymm10, %ymm3
+	vpermpd	$238, %ymm10, %ymm10
+	vshufpd	$12, %ymm3, %ymm15, %ymm3
+	vshufpd	$12, %ymm10, %ymm0, %ymm10
+	vpermpd	$68, %ymm7, %ymm15
+	vpermpd	$68, %ymm8, %ymm0
+	vpermpd	$238, %ymm7, %ymm7
+	vpermpd	$238, %ymm8, %ymm8
+	vshufpd	$12, %ymm0, %ymm15, %ymm15
+	vshufpd	$12, %ymm8, %ymm7, %ymm7
+	vpermpd	$68, %ymm9, %ymm0
+	vpermpd	$68, %ymm6, %ymm8
+	vshufpd	$12, %ymm0, %ymm8, %ymm8
+	vpermpd	$238, %ymm6, %ymm6
+	vpermpd	$238, %ymm9, %ymm0
+	vshufpd	$12, %ymm0, %ymm6, %ymm0
+	vpermpd	$68, %ymm12, %ymm9
+	vpermpd	$68, %ymm14, %ymm6
+	vpermpd	$238, %ymm12, %ymm12
+	vpermpd	$238, %ymm14, %ymm14
+	vshufpd	$12, %ymm6, %ymm9, %ymm6
+	vshufpd	$12, %ymm14, %ymm12, %ymm12
+	vpermpd	$68, %ymm8, %ymm9
+	vpermpd	$68, %ymm3, %ymm14
+	vpermpd	$238, %ymm8, %ymm8
+	vpermpd	$238, %ymm3, %ymm3
+	vshufpd	$12, %ymm9, %ymm14, %ymm9
+	vshufpd	$12, %ymm8, %ymm3, %ymm8
+	vpermpd	$68, %ymm10, %ymm14
+	vpermpd	$68, %ymm0, %ymm3
+	vpermpd	$238, %ymm10, %ymm10
+	vpermpd	$238, %ymm0, %ymm0
+	vshufpd	$12, %ymm3, %ymm14, %ymm3
+	vshufpd	$12, %ymm0, %ymm10, %ymm0
+	vpermpd	$68, %ymm15, %ymm14
+	vpermpd	$68, %ymm6, %ymm10
+	vpermpd	$238, %ymm15, %ymm15
+	vpermpd	$238, %ymm6, %ymm6
+	vshufpd	$12, %ymm10, %ymm14, %ymm10
+	vshufpd	$12, %ymm6, %ymm15, %ymm15
+	vpermpd	$68, %ymm7, %ymm14
+	vpermpd	$68, %ymm12, %ymm6
+	vpermpd	$238, %ymm7, %ymm7
+	vpermpd	$238, %ymm12, %ymm12
+	vshufpd	$12, %ymm6, %ymm14, %ymm6
+	vshufpd	$12, %ymm12, %ymm7, %ymm7
+	vpermpd	$68, %ymm10, %ymm14
+	vpermpd	$68, %ymm9, %ymm12
+	vpermpd	$238, %ymm10, %ymm10
+	vpermpd	$238, %ymm9, %ymm9
+	vshufpd	$12, %ymm10, %ymm9, %ymm9
+	vpermpd	$68, %ymm15, %ymm10
+	vmovupd	%ymm9, -224(%rax)
+	vpermpd	$238, %ymm15, %ymm15
+	vpermpd	$68, %ymm8, %ymm9
+	vpermpd	$238, %ymm8, %ymm8
+	vshufpd	$12, %ymm10, %ymm9, %ymm9
+	vshufpd	$12, %ymm15, %ymm8, %ymm8
+	vmovupd	%ymm9, -192(%rax)
+	vmovupd	%ymm8, -160(%rax)
+	vpermpd	$68, %ymm6, %ymm9
+	vpermpd	$68, %ymm3, %ymm8
+	vpermpd	$238, %ymm6, %ymm6
+	vpermpd	$238, %ymm3, %ymm3
+	vshufpd	$12, %ymm6, %ymm3, %ymm3
+	vpermpd	$68, %ymm7, %ymm6
+	vmovupd	%ymm3, -96(%rax)
+	vpermpd	$238, %ymm7, %ymm7
+	vpermpd	$68, %ymm0, %ymm3
+	vpermpd	$238, %ymm0, %ymm0
+	vshufpd	$12, %ymm7, %ymm0, %ymm0
+	vmovupd	960(%rsp), %ymm7
+	vshufpd	$12, %ymm6, %ymm3, %ymm3
+	vshufpd	$12, %ymm14, %ymm12, %ymm12
+	vmovupd	%ymm3, -64(%rax)
+	vpermpd	$238, %ymm7, %ymm14
+	vpermpd	$68, %ymm7, %ymm3
+	vmovupd	512(%rsp), %ymm7
+	vmovupd	%ymm0, -32(%rax)
+	vaddpd	896(%rsp), %ymm1, %ymm1
+	vpermpd	$68, %ymm13, %ymm0
+	vshufpd	$12, %ymm0, %ymm3, %ymm3
+	vpermpd	$68, %ymm7, %ymm6
+	vpermpd	$68, %ymm11, %ymm0
+	vshufpd	$12, %ymm9, %ymm8, %ymm8
+	vshufpd	$12, %ymm0, %ymm6, %ymm6
+	vmovupd	%ymm8, -128(%rax)
+	vpermpd	$238, %ymm7, %ymm9
+	vpermpd	$68, %ymm4, %ymm0
+	vpermpd	$68, %ymm5, %ymm8
+	vpermpd	$238, %ymm11, %ymm11
+	vshufpd	$12, %ymm11, %ymm9, %ymm11
+	vshufpd	$12, %ymm0, %ymm8, %ymm8
+	vpermpd	$68, %ymm2, %ymm9
+	vpermpd	$68, %ymm1, %ymm0
+	vshufpd	$12, %ymm0, %ymm9, %ymm9
+	vpermpd	$238, %ymm5, %ymm5
+	vpermpd	$68, %ymm8, %ymm0
+	vpermpd	$68, %ymm3, %ymm7
+	vpermpd	$238, %ymm13, %ymm13
+	vpermpd	$238, %ymm4, %ymm4
+	vshufpd	$12, %ymm4, %ymm5, %ymm4
+	vshufpd	$12, %ymm0, %ymm7, %ymm7
+	vpermpd	$238, %ymm2, %ymm2
+	vpermpd	$68, %ymm4, %ymm0
+	vshufpd	$12, %ymm13, %ymm14, %ymm13
+	vpermpd	$238, %ymm4, %ymm4
+	vpermpd	$68, %ymm13, %ymm10
+	vpermpd	$238, %ymm1, %ymm1
+	vpermpd	$238, %ymm13, %ymm13
+	vshufpd	$12, %ymm1, %ymm2, %ymm1
+	vshufpd	$12, %ymm0, %ymm10, %ymm10
+	vpermpd	$68, %ymm9, %ymm2
+	vshufpd	$12, %ymm4, %ymm13, %ymm0
+	vpermpd	$68, %ymm6, %ymm4
+	vshufpd	$12, %ymm2, %ymm4, %ymm4
+	vpermpd	$238, %ymm8, %ymm8
+	vpermpd	$68, %ymm1, %ymm2
+	vpermpd	$68, %ymm11, %ymm5
+	vpermpd	$238, %ymm3, %ymm3
+	vshufpd	$12, %ymm8, %ymm3, %ymm3
+	vshufpd	$12, %ymm2, %ymm5, %ymm5
+	vpermpd	$68, %ymm4, %ymm8
+	vpermpd	$68, %ymm7, %ymm2
+	vpermpd	$238, %ymm4, %ymm4
+	vpermpd	$238, %ymm6, %ymm6
+	vpermpd	$238, %ymm9, %ymm9
+	vpermpd	$238, %ymm7, %ymm7
+	vmovupd	%ymm12, -256(%rax)
+	vshufpd	$12, %ymm9, %ymm6, %ymm6
+	vshufpd	$12, %ymm8, %ymm2, %ymm2
+	vshufpd	$12, %ymm4, %ymm7, %ymm7
+	vmovupd	%ymm2, -256(%r11)
+	vpermpd	$68, %ymm6, %ymm4
+	vpermpd	$68, %ymm3, %ymm2
+	vpermpd	$238, %ymm6, %ymm6
+	vpermpd	$238, %ymm3, %ymm3
+	vshufpd	$12, %ymm4, %ymm2, %ymm2
+	vshufpd	$12, %ymm6, %ymm3, %ymm3
+	vmovupd	%ymm2, -192(%r11)
+	vmovupd	%ymm3, -160(%r11)
+	vpermpd	$68, %ymm10, %ymm2
+	vpermpd	$68, %ymm5, %ymm3
+	vpermpd	$238, %ymm11, %ymm11
+	vpermpd	$238, %ymm1, %ymm1
+	vshufpd	$12, %ymm3, %ymm2, %ymm2
+	vshufpd	$12, %ymm1, %ymm11, %ymm1
+	vmovupd	%ymm2, -128(%r11)
+	vpermpd	$68, %ymm1, %ymm3
+	vpermpd	$68, %ymm0, %ymm2
+	vpermpd	$238, %ymm10, %ymm10
+	vpermpd	$238, %ymm5, %ymm5
+	vpermpd	$238, %ymm0, %ymm0
+	vpermpd	$238, %ymm1, %ymm1
+	vshufpd	$12, %ymm5, %ymm10, %ymm5
+	vshufpd	$12, %ymm3, %ymm2, %ymm2
+	vshufpd	$12, %ymm1, %ymm0, %ymm1
+	vmovupd	%ymm7, -224(%r11)
+	vmovupd	%ymm5, -96(%r11)
+	vmovupd	%ymm2, -64(%r11)
+	vmovupd	%ymm1, -32(%r11)
+	cmpq	%r9, %rdi
+	jne	.L5
+
+That's almost 7 times slower than -O3, 2.4 times slower than scalar code, generated by -O2 and twice slower than clang -Ofast.
+Being twice slower than clang is not a small fit.
+
+I knew about this bug several weeks ago, but somehow didn't realize that 11.0 is so near, so was lazy to report at time.
+Now I am sorry.
