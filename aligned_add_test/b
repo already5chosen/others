@@ -1,0 +1,7 @@
+g++ -c -Wall -O2 -march=ivybridge aligned_add_main.cpp
+gcc -c -Wall -O2 -march=ivybridge sum64g.c
+gcc -c -Wall -O2 -march=ivybridge sum64sse.c
+gcc -c -Wall -O2 -march=skylake   sum64avx2.c
+g++ -s -Wall -O2 -march=ivybridge aligned_add_main.o sum64g.o    -o tst_8b
+g++ -s -Wall -O2 -march=ivybridge aligned_add_main.o sum64sse.o  -o tst_16b
+g++ -s -Wall -O2 -march=skylake   aligned_add_main.o sum64avx2.o -o tst_32b
