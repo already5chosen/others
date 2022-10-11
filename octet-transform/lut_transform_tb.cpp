@@ -16,8 +16,8 @@ uint64_t Checksum(const uint32_t *input, size_t quarterlen);
 int main(int , char** )
 {
   const int BUF_LEN = 1024*12;   // for both input and output to fit comfortably into 32K L1D
-  const int REP_PER_ITER = 5000; // for individual test to take order of 1 msec
-  const int N_ITER  = 201;
+  const int REP_PER_ITER = 1000; // for individual test to take order of 1 msec
+  const int N_ITER  = 711;
 
   // prepare aligned buffers
   const int BUF_ALIGNMENT = 64;
@@ -61,8 +61,8 @@ int main(int , char** )
     auto t1 = std::chrono::steady_clock::now();
     uint64_t uut_cs = 0;
     for (int i = 0; i < REP_PER_ITER; ++i) {
-      uut_ByteConversion(BUF_LEN/8, (uint8_t*)lutbuf, (uint8_t*)inpbuf, (uint8_t*)outbuf1);
-      uut_cs += Checksum((uint32_t*)outbuf1, BUF_LEN/16);
+      uut_ByteConversion(BUF_LEN/8, (uint8_t*)lutbuf, (uint8_t*)inpbuf, (uint8_t*)outbuf2);
+      uut_cs += Checksum((uint32_t*)outbuf2, BUF_LEN/16);
     }
     auto t2 = std::chrono::steady_clock::now();
 

@@ -3,7 +3,7 @@
 
 void uut_ByteConversion(size_t length, const uint8_t *lut, const uint8_t *input, uint8_t *output)
 {
-  if (length == 0) {
+  if (length > 0) {
     do {
       size_t inp0 = input[0];
       size_t inp1 = input[1];
